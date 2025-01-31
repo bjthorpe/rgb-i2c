@@ -6,6 +6,7 @@ from data import DEFAULT_I2C_ADDR, I2C_CMD_DISP_OFF, I2C_CMD_GET_DEV_ID, \
     DEVICE_NUM_MIN, DEVICE_NUM_MAX, \
     COLORS, WAIT_READ, WAIT_WRITE
 
+from pixel import Pixel
 from utility import int_to_bytes
 
 
@@ -50,6 +51,7 @@ class Display:
         assert isinstance(ID, int)
         assert isinstance(address, int)
 
+        assert size == 8, 'HARD CODED SIZE OF 8 FOR NOW.'  # TODO: displays are currently hard coded to a size of 8x8.
         assert size > 0, 'Size of display must be > 0.'
         assert side in (0, 1), 'Only two possible sides at the moment, 0 and 1.'
         assert X >= 0, 'X location of display should be >= 0.'
@@ -63,6 +65,8 @@ class Display:
         self.Y = Y
         self.ID = ID
         self.addr = address
+
+        self.frame = [Pixel() for _ in range(self.size * self.size)]
 
     def get_VID(self, bus):
         assert isinstance(bus, SMBus)
@@ -150,8 +154,56 @@ class Display:
         # Maximum of 32 bytes allowed per send, so the 71 pieces of info are split into 3 chunks of 7, 32, 32.
         bus.write_i2c_block_data(self.addr, I2C_CMD_DISP_CUSTOM, data)
         sleep(WAIT_WRITE)
-        bus.write_i2c_block_data(self.addr, I2C_CMD_CONTINUE_DATA, frame[:32])
+        bus.write_i2c_block_data(self.addr, I2C_CMD_CONTINUE_DATA, frame[:32])  # TODO: remove assumption that we have 8x8.
         sleep(WAIT_WRITE)
-        bus.write_i2c_block_data(self.addr, I2C_CMD_CONTINUE_DATA, frame[32:])
+        bus.write_i2c_block_data(self.addr, I2C_CMD_CONTINUE_DATA, frame[32:])  # TODO: remove assumption that we have 8x8.
         sleep(WAIT_WRITE)
+
+    def display_current_frame(self, bus, duration=1, forever=True):
+        assert isinstance(bus, SMBus)
+        assert isinstance(duration, (float, int))
+        assert isinstance(forever, bool)
+    
+        assert duration > 0.001, 'Error: duration should be at least 1 ms.'
+        
+        duration_bytes = int_to_bytes(int(duration * 1000)) # Duration is in ms.
+        
+        # Data of the frame.
+        # The latter 3 zeroes are redundant data.
+        data = [duration_bytes[1], duration_bytes[0], forever, 1, 0, 0, 0]  # The 1 is the number of frames.
+
+        frame = [p.color for p in self.frame]
+    
+        # Now send the data.
+        # Maximum of 32 bytes allowed per send, so the 71 pieces of info are split into 3 chunks of 7, 32, 32.
+        bus.write_i2c_block_data(self.addr, I2C_CMD_DISP_CUSTOM, data)
+        sleep(WAIT_WRITE)
+        bus.write_i2c_block_data(self.addr, I2C_CMD_CONTINUE_DATA, frame[:32])  # TODO: remove assumption that we have 8x8.
+        sleep(WAIT_WRITE)
+        bus.write_i2c_block_data(self.addr, I2C_CMD_CONTINUE_DATA, frame[32:])  # TODO: remove assumption that we have 8x8.
+        sleep(WAIT_WRITE)
+
+    def check_pixel_changes(self, tick):
+        assert isinstance(tick, (float, int))
+
+        assert tick > 0.0, 'Tick should be > 0.0.'
+
+        for pixel in self.frame:
+            pixel.check_color_change(tick)
+
+    def update_pixel(self, x, y, gradient, timers=None):
+        assert isinstance(x, int)
+        assert isinstance(y, int)
+
+        assert x < self.size, 'Pixel requested out of x bounds.'
+        assert y < self.size, 'Pixel requested out of y bounds.'
+
+        self.frame[x + 8 * y].set_gradient(gradient, timers)
+
+    def update_frame(self, frame):
+        assert all(isinstance(i, Pixel) for i in frame)
+
+        assert len(frame) == self.size * self.size
+
+        self.frame = frame
 
