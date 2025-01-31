@@ -69,7 +69,7 @@ class Display:
     
         bus.write_byte_data(self.addr, 0, I2C_CMD_GET_DEV_ID)
     
-        result = bus.read_i2c_block_data(DEFAULT_I2C_ADDR, 0, 2)
+        result = bus.read_i2c_block_data(self.addr, 0, 2)
     
         return hex(result[1]), hex(result[0])
 
