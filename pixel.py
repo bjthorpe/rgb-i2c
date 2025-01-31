@@ -64,4 +64,5 @@ class Pixel:
                     self.color = next(self.gradient)  # Get the next colour.
                 except StopIteration:
                     self.color = self.color_default
+                    self.gradient = None
 
