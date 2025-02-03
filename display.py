@@ -1,3 +1,4 @@
+from copy import deepcopy
 from smbus import SMBus
 from time import sleep
 
@@ -43,13 +44,15 @@ def clear_displays(bus, displays):
 
 class Display:
     def __init__(self, size=8, side=0, X=0, Y=0,
-                 ID=0, address=DEFAULT_I2C_ADDR):
+                 ID=0, address=DEFAULT_I2C_ADDR,
+                 double_buffering=True):
         assert isinstance(size, int)
         assert isinstance(side, int)
         assert isinstance(X, int)
         assert isinstance(Y, int)
         assert isinstance(ID, int)
         assert isinstance(address, int)
+        assert isinstance(double_buffering, bool)
 
         assert size == 8, 'HARD CODED SIZE OF 8 FOR NOW.'  # TODO: displays are currently hard coded to a size of 8x8.
         assert size > 0, 'Size of display must be > 0.'
@@ -65,8 +68,12 @@ class Display:
         self.Y = Y
         self.ID = ID
         self.addr = address
+        self.dbl_buff = double_buffering
 
-        self.frame = [Pixel() for _ in range(self.size * self.size)]
+        self.frame_A = [Pixel() for _ in range(self.size * self.size)]
+        self.frame_B = deepcopy(self.frame_A) if self.dbl_buff else None
+
+        self.display_frame_A = True
 
     def get_VID(self, bus):
         assert isinstance(bus, SMBus)
@@ -172,7 +179,7 @@ class Display:
         # The latter 3 zeroes are redundant data.
         data = [duration_bytes[1], duration_bytes[0], forever, 1, 0, 0, 0]  # The 1 is the number of frames.
 
-        frame = [p.color for p in self.frame]
+        frame = [p.color for p in self.frame_A] if self.display_frame_A else [p.color for p in self.frame_B]
     
         # Now send the data.
         # Maximum of 32 bytes allowed per send, so the 71 pieces of info are split into 3 chunks of 7, 32, 32.
@@ -188,7 +195,7 @@ class Display:
 
         assert tick > 0.0, 'Tick should be > 0.0.'
 
-        for pixel in self.frame:
+        for pixel in self.frame_A if not self.display_frame_A else self.frame_B:
             pixel.check_color_change(tick)
 
     def update_pixel(self, x, y, gradient, timers=None):
@@ -198,12 +205,29 @@ class Display:
         assert x < self.size, 'Pixel requested out of x bounds.'
         assert y < self.size, 'Pixel requested out of y bounds.'
 
-        self.frame[x + 8 * y].set_gradient(gradient, timers)
+        if self.display_frame_A:
+            self.frame_B[x + 8 * y].set_gradient(gradient, timers)
+        else:
+            self.frame_A[x + 8 * y].set_gradient(gradient, timers)
 
     def update_frame(self, frame):
         assert all(isinstance(i, Pixel) for i in frame)
 
         assert len(frame) == self.size * self.size
 
-        self.frame = frame
+        if self.display_frame_A:
+            self.frame_B = frame
+        else:
+            self.frame_A = frame
+
+    def copy_buffer(self):
+        if self.dbl_buff:
+            if self.display_frame_A:
+                self.frame_B = deepcopy(self.frame_A)
+            else:
+                self.frame_A = deepcopy(self.frame_B)
+
+    def switch_buffer(self):
+        if self.dbl_buff:
+            self.display_frame_A = not self.display_frame_A
 
