@@ -24,6 +24,9 @@ class Pixel:
         self.timers = None  # A generator holding the timers of a requested gradient pattern.
         self.gradient = None  # A generator holding the colours of a requested gradient pattern.
 
+    def __repr__(self):
+        return f'{self.color}'
+
     def set_gradient(self, gradient, timers=None):
         assert all(isinstance(i, int) for i in gradient)
 
@@ -38,11 +41,11 @@ class Pixel:
         assert all(i > 0.0 for i in timers)
         assert all(255 >= i >= 0 for i in gradient)
 
-        self.timers = (i for i in timers)
-        self.gradient = (i for i in gradient)
+        self.timers = [i for i in timers]
+        self.gradient = [i for i in gradient]
 
-        self.timer = next(self.timers)
-        self.color = next(self.gradient)
+        self.timer = self.timers.pop(0)
+        self.color = self.gradient.pop(0)
 
     def check_color_change(self, tick):
         assert isinstance(tick, (float, int))
@@ -55,14 +58,14 @@ class Pixel:
             if self.timer <= 0.0:  # If this timer has ran out, then change the colour.
 
                 try:
-                    self.timer = next(self.timers)  # Get the timer for the next color.
-                except StopIteration:
+                    self.timer = self.timers.pop(0)  # Get the timer for the next color.
+                except IndexError:
                     self.timer = None  # Reset back to None if we have reached the end of the gradient pattern.
                     self.timers = None
 
                 try:
-                    self.color = next(self.gradient)  # Get the next colour.
-                except StopIteration:
+                    self.color = self.gradient.pop(0)  # Get the next colour.
+                except IndexError:
                     self.color = self.color_default
                     self.gradient = None
 

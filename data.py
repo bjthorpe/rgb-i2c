@@ -59,5 +59,5 @@ WAIT_INITIAL = 0.1 # Time to wait for Bus on startup.
 DEVICE_NUM_MIN = 8 # Minimum device number sensible as in `i2cdetect -y 1`.
 DEVICE_NUM_MAX = 119 # Maximum device number sensible as in `i2cdetect -y 1`
 
-FRAME_RATE = 1.0 / 24.0 # How often is the frame manager updated?
+FRAME_RATE = 1.0 / 30.0 # How often is the frame manager updated?
 
