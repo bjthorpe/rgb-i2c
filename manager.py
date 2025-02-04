@@ -3,7 +3,7 @@ from smbus import SMBus
 from threading import Thread
 from time import sleep, time
 
-from data import COLORS, FRAME_RATE, GRADIENT_DELAY
+from data import COLORS, COLOR_DEFAULT, FRAME_RATE, GRADIENT_DELAY, WAIT_DISPLAY
 from display import clear_displays, create_displays
 from pixel import create_pixels
 from utility import DataPoint, wait_for_matrix_ready
@@ -51,14 +51,7 @@ def manager_display_preprocessed():
 
         end_time = time()
 
-        sleep_time = FRAME_RATE - (end_time - start_time)
-
-        if sleep_time < 0.001:
-            if (time() - time_last_error_msg) > 1.0:
-                print('Warning: time to display frames taking longer than the frame rate.')
-                time_last_error_msg = time()
-        else:
-            sleep(sleep_time)
+        sleep(WAIT_DISPLAY)
 
         if g_break:
             break
@@ -109,14 +102,15 @@ def manager_data_preprocessed():
     xy_to_display = {(i, j): displays[0] for i in range(8) for j in range(8)}
 
     # List of all data for the simulation: (x, y, time, gradient, timers). TODO: remove after testing.
-    test_data = [(2, 5, 1.00, range(0, 50,  10)),  # After 1.0 second, apply a gradient to co-ordinate (2, 5).
-                 (5, 7, 1.25, range(30, 0, -10))]  # After 2.5 seconds, apply a gradient to co-ordinate (5, 7).
+    test_data = [(2, 5, 1.00, range(0, 50,  10)),
+                 (5, 7, 1.25, range(10, 0, -1))]
 
     # Build up the data with time differentials. TODO: update this with a data gathering/input function rather than test_data.
     data = []
     for x, y, t, gradient in test_data:
         for n, color in enumerate(gradient):
             data.append(DataPoint(x, y, color, time_=t+n*GRADIENT_DELAY))
+        data.append(DataPoint(x, y, COLOR_DEFAULT, time_=t+(n+1)*GRADIENT_DELAY))
     data = sorted(data)
 
     time_last_error_msg = -999.0
@@ -145,13 +139,9 @@ def manager_data_preprocessed():
 
         assert g_display is not None, 'Cannot find a display to show pixel ({data_point.x},{data_point.y}).'
 
-        g_display.update_pixel(data_point.x, data_point.y, data_point.color)
-
-        g_display.switch_buffer()
-
-        g_update_display = True
-
         g_display.copy_buffer()
+
+        g_display.update_pixel(data_point.x, data_point.y, data_point.color)
 
         end_time = time()
 
@@ -165,6 +155,10 @@ def manager_data_preprocessed():
                 time_last_error_msg = time()
         else:
             sleep(wait_time)
+
+        g_display.switch_buffer()
+
+        g_update_display = True
 
         first_pass = False
 

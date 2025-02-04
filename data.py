@@ -33,28 +33,31 @@ I2C_CMD_SET_ADDR = 0xc0 # This command sets device i2c address
 I2C_CMD_RST_ADDR = 0xc1 # This command resets device i2c address
 
 orientation_type = {
-    "ROTATE_0": 0,
-    "ROTATE_90": 1,
-    "ROTATE_180": 2,
-    "ROTATE_270": 3,
+    'ROTATE_0': 0,
+    'ROTATE_90': 1,
+    'ROTATE_180': 2,
+    'ROTATE_270': 3,
 }
 
-COLORS={
-    "red": 0x00,
-    "orange": 0x12,
-    "yellow": 0x18,
-    "green": 0x52,
-    "cyan": 0x7f,
-    "blue": 0xaa,
-    "purple": 0xc3,
-    "pink": 0xdc,
-    "white": 0xfe,
-    "black": 0xff,
+COLORS = {
+    'red': 0x00,
+    'orange': 0x12,
+    'yellow': 0x18,
+    'green': 0x52,
+    'cyan': 0x7f,
+    'blue': 0xaa,
+    'purple': 0xc3,
+    'pink': 0xdc,
+    'white': 0xfe,
+    'black': 0xff,
 }
+
+COLOR_DEFAULT = COLORS.get('black')
 
 WAIT_WRITE = 0.001 # Time to wait for Bus after a write statement.
 WAIT_READ = 0.1 # Time to wait for Bus after a read statement
 WAIT_INITIAL = 0.1 # Time to wait for Bus on startup.
+WAIT_DISPLAY = 0.0001 # How long should the display thread wait before checking if any updates to the displays are needed?
 
 DEVICE_NUM_MIN = 8 # Minimum device number sensible as in `i2cdetect -y 1`.
 DEVICE_NUM_MAX = 119 # Maximum device number sensible as in `i2cdetect -y 1`

@@ -1,4 +1,4 @@
-from data import COLORS, GRADIENT_DELAY
+from data import COLORS, COLOR_DEFAULT, GRADIENT_DELAY
 
 
 def create_pixels(colors):
@@ -10,8 +10,6 @@ def create_pixels(colors):
 
 
 class Pixel:
-    color_default = COLORS['black']  # What colour should be set as the background?
-
     def __init__(self, color=COLORS['black']):
         assert isinstance(color, int)
 
@@ -70,7 +68,7 @@ class Pixel:
             try:
                 self.color = self.gradient.pop(0)  # Get the next colour.
             except IndexError:
-                self.color = self.color_default
+                self.color = COLOR_DEFAULT
                 self.gradient = None
 
             self.change_detected = False
