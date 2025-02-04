@@ -173,3 +173,5 @@ cython_debug/
 # Snakeviz timings profile.
 timings.prof
 
+# Data for testing.
+testing.dat

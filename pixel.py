@@ -1,4 +1,4 @@
-from data import COLORS
+from data import COLORS, COLOR_DEFAULT, GRADIENT_DELAY
 
 
 def create_pixels(colors):
@@ -10,9 +10,6 @@ def create_pixels(colors):
 
 
 class Pixel:
-    color_default = COLORS['black']  # What colour should be set as the background?
-    timer_default = 0.5  # How long is the default between gradient changes?
-
     def __init__(self, color=COLORS['black']):
         assert isinstance(color, int)
 
@@ -24,16 +21,18 @@ class Pixel:
         self.timers = None  # A generator holding the timers of a requested gradient pattern.
         self.gradient = None  # A generator holding the colours of a requested gradient pattern.
 
+        self.change_detected = False
+
     def __repr__(self):
         return f'{self.color}'
 
-    def set_gradient(self, gradient, timers=None):
+    def set_gradient(self, gradient, timers):
         assert all(isinstance(i, int) for i in gradient)
 
         if timers is not None:
             assert all(isinstance(i, (float, int)) for i in timers)
         else:
-            timers = [self.timer_default] * len(gradient)
+            timers = [GRADIENT_DELAY] * len(gradient)
 
         assert len(timers) == len(gradient)
         assert len(timers) > 0
@@ -47,7 +46,7 @@ class Pixel:
         self.timer = self.timers.pop(0)
         self.color = self.gradient.pop(0)
 
-    def check_color_change(self, tick):
+    def check_change(self, tick):
         assert isinstance(tick, (float, int))
 
         assert tick > 0.0, 'Tick should be > 0.0.'
@@ -56,16 +55,21 @@ class Pixel:
             self.timer -= tick  # Reduce the current colour timer by the tick.
 
             if self.timer <= 0.0:  # If this timer has ran out, then change the colour.
+                self.change_detected = True
 
-                try:
-                    self.timer = self.timers.pop(0)  # Get the timer for the next color.
-                except IndexError:
-                    self.timer = None  # Reset back to None if we have reached the end of the gradient pattern.
-                    self.timers = None
+    def apply_change(self):
+        if self.change_detected:
+            try:
+                self.timer = self.timers.pop(0)  # Get the timer for the next color.
+            except IndexError:
+                self.timer = None  # Reset back to None if we have reached the end of the gradient pattern.
+                self.timers = None
 
-                try:
-                    self.color = self.gradient.pop(0)  # Get the next colour.
-                except IndexError:
-                    self.color = self.color_default
-                    self.gradient = None
+            try:
+                self.color = self.gradient.pop(0)  # Get the next colour.
+            except IndexError:
+                self.color = COLOR_DEFAULT
+                self.gradient = None
+
+            self.change_detected = False
 

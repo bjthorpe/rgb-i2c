@@ -1,6 +1,27 @@
 from time import sleep
 
-from data import WAIT_INITIAL
+from data import GRADIENT_DELAY, WAIT_INITIAL
+
+
+class DataPoint:
+    def __init__(self, x, y, color, time_):
+        assert isinstance(x, int)
+        assert isinstance(y, int)
+        assert isinstance(color, int)
+        assert isinstance(time_, (float, int))
+
+        assert 255 >= color >= 0, 'Colour number should be between 0 and 255.'
+
+        self.x = x
+        self.y = y
+        self.color = color
+        self.time = time_
+
+    def __repr__(self):
+        return f'({self.x},{self.y}) {self.color} {self.time}'
+
+    def __lt__(self, other):
+        return self.time < other.time
 
 
 def wait_for_matrix_ready():
