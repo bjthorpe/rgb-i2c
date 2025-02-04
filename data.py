@@ -61,3 +61,5 @@ DEVICE_NUM_MAX = 119 # Maximum device number sensible as in `i2cdetect -y 1`
 
 FRAME_RATE = 1.0 / 30.0 # How often is the frame manager updated?
 
+GRADIENT_DELAY = 0.5  # How long is the default between gradient changes?
+

@@ -73,7 +73,9 @@ class Display:
         self.frame_A = [Pixel() for _ in range(self.size * self.size)]
         self.frame_B = deepcopy(self.frame_A) if self.dbl_buff else None
 
-        self.display_frame_A = True
+        self.display_frame_A = True  # Do we use the A or B frame for displaying?
+        self.change_detected = False  # Has a change been detected on this display from the data manager?
+        self.needs_updating = False  # So the display thread knows whether to bother updating this display or not.
 
     def get_VID(self, bus):
         assert isinstance(bus, SMBus)
@@ -180,7 +182,7 @@ class Display:
         data = [duration_bytes[1], duration_bytes[0], forever, 1, 0, 0, 0]  # The 1 is the number of frames.
 
         frame = [p.color for p in self.frame_A] if self.display_frame_A else [p.color for p in self.frame_B]
-    
+
         # Now send the data.
         # Maximum of 32 bytes allowed per send, so the 71 pieces of info are split into 3 chunks of 7, 32, 32.
         bus.write_i2c_block_data(self.addr, I2C_CMD_DISP_CUSTOM, data)
@@ -196,9 +198,30 @@ class Display:
         assert tick > 0.0, 'Tick should be > 0.0.'
 
         for pixel in self.frame_A if not self.display_frame_A else self.frame_B:
-            pixel.check_color_change(tick)
+            pixel.check_change(tick)
 
-    def update_pixel(self, x, y, gradient, timers=None):
+        self.change_detected = self.change_detected or \
+            any(pixel.change_detected for pixel in (self.frame_A if not self.display_frame_A else self.frame_B))
+
+    def apply_pixel_changes(self):
+        for pixel in self.frame_A if not self.display_frame_A else self.frame_B:
+            pixel.apply_change()
+
+    def update_pixel(self, x, y, color):
+        ''' Updates whichever frame is not in use for displaying with a provided pixel co-ordinate and colour. '''
+
+        assert isinstance(x, int)
+        assert isinstance(y, int)
+        assert isinstance(color, int)
+
+        assert 255 >= color >= 0, 'Colour number should be between 0 and 255.'
+
+        if self.display_frame_A:                                         
+            self.frame_B[x + self.size * y].color = color
+        else:
+            self.frame_A[x + self.size * y].color = color
+
+    def update_pixel_gradient(self, x, y, gradient, timers=None):
         assert isinstance(x, int)
         assert isinstance(y, int)
 
@@ -210,6 +233,8 @@ class Display:
         else:
             self.frame_A[x + 8 * y].set_gradient(gradient, timers)
 
+        self.change_detected = True
+
     def update_frame(self, frame):
         assert all(isinstance(i, Pixel) for i in frame)
 
@@ -219,6 +244,8 @@ class Display:
             self.frame_B = frame
         else:
             self.frame_A = frame
+
+        self.change_detected = True
 
     def copy_buffer(self):
         if self.dbl_buff:
