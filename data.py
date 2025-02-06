@@ -10,7 +10,14 @@ def process_data(file_=None,
 
     if file_ is not None:
         assert isinstance(file_, str)
+
     assert isinstance(color_method, str)
+    assert isinstance(energy_tick_rate, (float, int))
+    assert isinstance(gradient_delay, (float, int))
+
+    assert isinstance(color_gradient, tuple)
+    assert len(color_gradient) == 2
+    assert all(isinstance(energy, (float, int)) and isinstance(color, int) for energy, color in zip(*color_gradient))
 
     color_method = color_method.lower()
 
@@ -48,10 +55,11 @@ def process_data(file_=None,
                     # An event, iB, occurs within the time frame that iA is still alight.
 
                     # Therefore, we erase the ticks of the initial iA event that would occur after iB has started.
-                    iA.ticks = Information.get_num_ticks_from_time(iB.start_time-iA.start_time, gradient_delay) - 1  # -1 as we don't need a tick to turn it back to background. iB will deal with that.
+                    # This includes remove the final background colour tick of iA, which iB will now deal with.
+                    iA.ticks -= Information.get_num_ticks_from_time(iA.end_time-iB.start_time, gradient_delay)
 
-                    # And re-compute the initial iA event end time given these new (lesser) number of ticks.
-                    iA.end_time = iA.start_time + Information.get_alight_time(iA.ticks, gradient_delay)
+                    # The initial iA event end time is now equal to the latter iB event start time.
+                    iA.end_time = iB.start_time
 
                     # The energy of the latter iB event will be itself plus |the energy of the initial iA event minus the amount it has decayed by|.
                     iB.energy += iA.energy - iA.ticks * energy_tick_rate
