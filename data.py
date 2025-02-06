@@ -1,68 +1,142 @@
-#The device i2c address in default
-DEFAULT_I2C_ADDR = 0x65
+from parameters import COLOR_DEFAULT, COLOR_GRADIENT_DEFAULT, COLOR_METHODS, COLOR_METHOD_DEFAULT, ENERGY_TICK_RATE_DEFAULT, GRADIENT_DELAY
+from utility import get_color_from_gradient
 
-# Vender ID and Product ID of the device
-VID = 0x2886
-PID = 0x8005
 
-# Comands to set mode
-I2C_CMD_GET_DEV_ID = 0x00 # This command gets device ID information
-I2C_CMD_DISP_BAR = 0x01 # This command displays LED bar
-I2C_CMD_DISP_EMOJI = 0x02 # This command displays emoji
-I2C_CMD_DISP_NUM = 0x03 # This command displays number
-I2C_CMD_DISP_STR = 0x04 # This command displays string
-I2C_CMD_DISP_CUSTOM = 0x05 # This command displays user-defined pictures
-I2C_CMD_DISP_OFF = 0x06 # This command clears the display
-I2C_CMD_CONTINUE_DATA = 0x81
+def process_data(file_=None,
+                 color_method=COLOR_METHOD_DEFAULT,
+                 energy_tick_rate=ENERGY_TICK_RATE_DEFAULT,
+                 gradient_delay=GRADIENT_DELAY,
+                 color_gradient=COLOR_GRADIENT_DEFAULT):
 
-I2C_CMD_DISP_COLOR_BAR = 0x09 # This command displays colorful led bar
-I2C_CMD_DISP_COLOR_WAVE = 0x0a # This command displays built-in wave animation
-I2C_CMD_DISP_COLOR_CLOCKWISE = 0x0b # This command displays built-in clockwise animation
-I2C_CMD_DISP_COLOR_ANIMATION = 0x0c # This command displays other built-in animation
-I2C_CMD_DISP_COLOR_BLOCK = 0x0d # This command displays an user-defined color
+    if file_ is not None:
+        assert isinstance(file_, str)
+    assert isinstance(color_method, str)
 
-I2C_CMD_LED_ON = 0xb0 # This command turns on the indicator LED flash mode
-I2C_CMD_LED_OFF = 0xb1 # This command turns off the indicator LED flash mode
-I2C_CMD_AUTO_SLEEP_ON = 0xb2 # This command enable device auto sleep mode
-I2C_CMD_AUTO_SLEEP_OFF = 0xb3 # This command disable device auto sleep mode (default mode)
+    color_method = color_method.lower()
 
-I2C_CMD_DISP_ROTATE = 0xb4 # This command setting the display orientation
-I2C_CMD_DISP_OFFSET = 0xb5 # This command setting the display offset
+    # TODO: if a file is provided, read it instead of using the test data.
 
-I2C_CMD_SET_ADDR = 0xc0 # This command sets device i2c address
-I2C_CMD_RST_ADDR = 0xc1 # This command resets device i2c address
+    # List of all the pieces of information for the simulation: (x, y, time, energy). TODO: remove after testing.
+    test_information = [(3, 3, 1.00, 18.0),
+                        (3, 3, 2.75, 20.0)]
 
-orientation_type = {
-    'ROTATE_0': 0,
-    'ROTATE_90': 1,
-    'ROTATE_180': 2,
-    'ROTATE_270': 3,
-}
+    assert color_method in COLOR_METHODS, f'{color_method} is an unknown colour method.'
 
-COLORS = {
-    'red': 0x00,
-    'orange': 0x12,
-    'yellow': 0x18,
-    'green': 0x52,
-    'cyan': 0x7f,
-    'blue': 0xaa,
-    'purple': 0xc3,
-    'pink': 0xdc,
-    'white': 0xfe,
-    'black': 0xff,
-}
+    # Build up the data based on the provided colour method.
+    information = []  # Each piece of information which we have read in from file.
+    data = []  # The final pieces of data points after the information is processed below.
 
-COLOR_DEFAULT = COLORS.get('black')
+    if color_method == 'energy':
 
-WAIT_WRITE = 0.001 # Time to wait for Bus after a write statement.
-WAIT_READ = 0.1 # Time to wait for Bus after a read statement
-WAIT_INITIAL = 0.1 # Time to wait for Bus on startup.
-WAIT_DISPLAY = 0.0001 # How long should the display thread wait before checking if any updates to the displays are needed?
+        for x, y, t, e in test_information:  # x, y, time, energy. # TODO: don't use test_information.
+            num_ticks = Information.get_num_ticks_from_energy(e, energy_tick_rate)
+            alight_time = Information.get_alight_time(num_ticks, gradient_delay)
 
-DEVICE_NUM_MIN = 8 # Minimum device number sensible as in `i2cdetect -y 1`.
-DEVICE_NUM_MAX = 119 # Maximum device number sensible as in `i2cdetect -y 1`
+            information.append(Information(x, y, e, num_ticks, start_time=t, end_time=t+alight_time))
 
-FRAME_RATE = 1.0 / 30.0 # How often is the frame manager updated?
+        information = sorted(information)  # Sorted based on start_time.
 
-GRADIENT_DELAY = 0.5  # How long is the default between gradient changes?
+        # We need to make sure that any hits on pixels that are already lit up do not overwrite, but instead add, energy to the pixel.
+        for n, iA in enumerate(information):  # i for piece of information.
+
+            # Only bother look at pieces of information ahead of the currently considered one.
+            for iB in information[n+1:]:
+
+                # We're looking for pieces of information that hit the same pixel and iB starts before the end of iA.
+                if (iA.x == iB.x) and (iA.y == iB.y) and (iB.start_time < iA.end_time):
+
+                    # An event, iB, occurs within the time frame that iA is still alight.
+
+                    # Therefore, we erase the ticks of the initial iA event that would occur after iB has started.
+                    iA.ticks = Information.get_num_ticks_from_time(iB.start_time-iA.start_time, gradient_delay) - 1  # -1 as we don't need a tick to turn it back to background. iB will deal with that.
+
+                    # And re-compute the initial iA event end time given these new (lesser) number of ticks.
+                    iA.end_time = iA.start_time + Information.get_alight_time(iA.ticks, gradient_delay)
+
+                    # The energy of the latter iB event will be itself plus |the energy of the initial iA event minus the amount it has decayed by|.
+                    iB.energy += iA.energy - iA.ticks * energy_tick_rate
+
+                    # Now re-compute the (greater) number of ticks for the latter iB event.
+                    iB.ticks = Information.get_num_ticks_from_energy(iB.energy, energy_tick_rate)
+
+                    break
+
+
+        for i in information:  # i for piece of information.
+            # We can now generate all the data points of pixel lights-up via this piece of information.
+            data_points = i.get_data_points(color_gradient, energy_tick_rate, gradient_delay)
+
+            # We just now add them to our list of data points.
+            data += data_points
+
+    else:
+        raise ValueError(f'{color_method} is an unknown colour method.')
+
+    return data
+
+
+class Information:
+    def __init__(self, x, y, energy, ticks, start_time, end_time):
+        assert isinstance(x, int)
+        assert isinstance(y, int)
+        assert isinstance(energy, (float, int))
+        assert isinstance(ticks, int)
+        assert isinstance(start_time, (float, int))
+        assert isinstance(end_time, (float, int))
+
+        self.x = x
+        self.y = y
+        self.energy = energy
+        self.ticks = ticks  # With the given energy, how many `GRADIENT_DELAY` ticks will occur until the pixel is DEFAULT_COLOR again?
+        self.start_time = start_time
+        self.end_time = end_time
+
+    def __lt__(self, other):
+        return self.start_time < other.start_time
+
+    def __repr__(self):
+        return f'({self.x},{self.y})  {self.energy:6.2f}  {self.ticks}  {self.start_time:6.2f}  {self.end_time:6.2f}'
+
+    def get_data_points(self, color_gradient=COLOR_GRADIENT_DEFAULT,
+                        energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gradient_delay=GRADIENT_DELAY):
+        data_points = []
+
+        for tick in range(self.ticks+1):
+            energy = self.energy - tick * energy_tick_rate
+
+            color = COLOR_DEFAULT if energy <= 0.0 else get_color_from_gradient(energy, color_gradient)
+
+            data_points.append(DataPoint(self.x, self.y, color, self.start_time+tick*gradient_delay))
+
+        return data_points
+
+    @staticmethod
+    def get_num_ticks_from_energy(energy, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT):
+        return 1 + int(energy // energy_tick_rate)
+
+    @staticmethod
+    def get_num_ticks_from_time(time_, gradient_delay=GRADIENT_DELAY):
+        return 1 + int(time_ // gradient_delay)
+
+    @staticmethod
+    def get_alight_time(num_ticks, gradient_delay=GRADIENT_DELAY):
+        return num_ticks * gradient_delay
+
+
+class DataPoint:
+    def __init__(self, x, y, color, start_time):
+        assert isinstance(x, int)
+        assert isinstance(y, int)
+        assert isinstance(color, int)
+        assert isinstance(start_time, (float, int))
+
+        assert 255 >= color >= 0, 'Colour number should be between 0 and 255.'
+
+        self.x = x
+        self.y = y
+        self.color = color
+        self.start_time = start_time
+
+    def __repr__(self):
+        return f'({self.x},{self.y})  {self.color}  {self.start_time:6.2f}'
 

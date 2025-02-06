@@ -3,10 +3,11 @@ from smbus import SMBus
 from threading import Thread
 from time import sleep, time
 
-from data import COLORS, COLOR_DEFAULT, FRAME_RATE, GRADIENT_DELAY, WAIT_DISPLAY
+from data import process_data
 from display import clear_displays, create_displays
+from parameters import FRAME_RATE, WAIT_DISPLAY
 from pixel import create_pixels
-from utility import DataPoint, wait_for_matrix_ready
+from utility import wait_for_matrix_ready
 
 
 def reset():
@@ -101,20 +102,10 @@ def manager_data_preprocessed():
     # A dictionary to store which display is represent what data points. TODO: automate this.
     xy_to_display = {(i, j): displays[0] for i in range(8) for j in range(8)}
 
-    # List of all data for the simulation: (x, y, time, gradient, timers). TODO: remove after testing.
-    test_data = [(2, 5, 1.00, range(0, 50,  10)),
-                 (5, 7, 1.25, range(10, 0, -1))]
-
-    # Build up the data with time differentials. TODO: update this with a data gathering/input function rather than test_data.
-    data = []
-    for x, y, t, gradient in test_data:
-        for n, color in enumerate(gradient):
-            data.append(DataPoint(x, y, color, time_=t+n*GRADIENT_DELAY))
-        data.append(DataPoint(x, y, COLOR_DEFAULT, time_=t+(n+1)*GRADIENT_DELAY))
-    data = sorted(data)
+    data = process_data()  # TODO: add argument so user can specify a file to grab data. Also add this code to process a data file inside get_data.
 
     time_last_error_msg = -999.0
-    previous_data_point_time = 0.0
+    previous_start_time = 0.0
 
     first_pass = True
     no_new_data = False
@@ -145,9 +136,9 @@ def manager_data_preprocessed():
 
         end_time = time()
 
-        wait_time = data_point.time - previous_data_point_time - (end_time - start_time)
+        wait_time = data_point.start_time - previous_start_time - (end_time - start_time)
 
-        previous_data_point_time = data_point.time
+        previous_start_time = data_point.start_time
 
         if wait_time < 0.001 and not first_pass:
             if (time() - time_last_error_msg) > 1.0:
@@ -182,8 +173,6 @@ def manager_data_live():
     time_last_error_msg = -999.0
 
     t1 = time()
-
-    previous_data_point_time = 0.0
 
     while True:
         start_time = time()

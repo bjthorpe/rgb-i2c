@@ -2,7 +2,7 @@ from copy import deepcopy
 from smbus import SMBus
 from time import sleep
 
-from data import DEFAULT_I2C_ADDR, I2C_CMD_DISP_OFF, I2C_CMD_GET_DEV_ID, \
+from parameters import DEFAULT_I2C_ADDR, I2C_CMD_DISP_OFF, I2C_CMD_GET_DEV_ID, \
     I2C_CMD_DISP_EMOJI, I2C_CMD_DISP_NUM, I2C_CMD_DISP_CUSTOM, I2C_CMD_CONTINUE_DATA, \
     DEVICE_NUM_MIN, DEVICE_NUM_MAX, \
     COLORS, WAIT_READ, WAIT_WRITE
