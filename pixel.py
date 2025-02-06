@@ -1,4 +1,4 @@
-from data import COLORS, COLOR_DEFAULT, GRADIENT_DELAY
+from parameters import COLORS, COLOR_DEFAULT, GRADIENT_DELAY
 
 
 def create_pixels(colors):

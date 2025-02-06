@@ -1,27 +1,6 @@
 from time import sleep
 
-from data import GRADIENT_DELAY, WAIT_INITIAL
-
-
-class DataPoint:
-    def __init__(self, x, y, color, time_):
-        assert isinstance(x, int)
-        assert isinstance(y, int)
-        assert isinstance(color, int)
-        assert isinstance(time_, (float, int))
-
-        assert 255 >= color >= 0, 'Colour number should be between 0 and 255.'
-
-        self.x = x
-        self.y = y
-        self.color = color
-        self.time = time_
-
-    def __repr__(self):
-        return f'({self.x},{self.y}) {self.color} {self.time}'
-
-    def __lt__(self, other):
-        return self.time < other.time
+from parameters import GRADIENT_DELAY, WAIT_INITIAL
 
 
 def wait_for_matrix_ready():
@@ -35,4 +14,17 @@ def int_to_bytes(num):
     assert num >= 0, f'{num} too small, should be >= 0'
 
     return [int(i) for i in num.to_bytes(2, byteorder='big', signed=True)]
+
+
+def get_color_from_gradient(energy, color_gradient):
+    assert energy > 0.0
+
+    energy_bounds, colors = color_gradient
+
+    # Loop through the energy bounds from smallest to largest.
+    for upper_energy, color in zip(energy_bounds[::-1], colors[::-1]):
+        if energy <= upper_energy:
+            return color
+    else:
+        return colors[0]  # If we the energy doesn't fit anywhere, assume it is the highest energy.
 
