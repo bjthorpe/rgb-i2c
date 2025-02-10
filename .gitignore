@@ -174,4 +174,4 @@ cython_debug/
 timings.prof
 
 # Data for testing.
-testing.dat
+testing*.dat

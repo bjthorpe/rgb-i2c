@@ -1,4 +1,7 @@
-from parameters import COLOR_DEFAULT, COLOR_GRADIENT_DEFAULT, COLOR_METHODS, COLOR_METHOD_DEFAULT, ENERGY_TICK_RATE_DEFAULT, GRADIENT_DELAY
+from numpy import loadtxt
+
+from parameters import COLOR_DEFAULT, COLOR_GRADIENT_DEFAULT, COLOR_METHODS, COLOR_METHOD_DEFAULT, \
+                       ENERGY_TICK_RATE_DEFAULT, EVENT_TIME_DIFFERENCE_TOLERANCE, GRADIENT_DELAY, EXAMPLE_DATA
 from utility import get_color_from_gradient
 
 
@@ -6,7 +9,8 @@ def process_data(file_=None,
                  color_method=COLOR_METHOD_DEFAULT,
                  energy_tick_rate=ENERGY_TICK_RATE_DEFAULT,
                  gradient_delay=GRADIENT_DELAY,
-                 color_gradient=COLOR_GRADIENT_DEFAULT):
+                 color_gradient=COLOR_GRADIENT_DEFAULT,
+                 normalise=False):
 
     if file_ is not None:
         assert isinstance(file_, str)
@@ -14,39 +18,34 @@ def process_data(file_=None,
     assert isinstance(color_method, str)
     assert isinstance(energy_tick_rate, (float, int))
     assert isinstance(gradient_delay, (float, int))
-
     assert isinstance(color_gradient, tuple)
     assert len(color_gradient) == 2
     assert all(isinstance(energy, (float, int)) and isinstance(color, int) for energy, color in zip(*color_gradient))
+    assert isinstance(normalise, bool)  # Do we want to normalise the time of the data to be between 0 and 30 sec?
 
-    color_method = color_method.lower()
-
-    # TODO: if a file is provided, read it instead of using the test data.
-
-    # List of all the data points for the simulation: (time, side, x, y, energy). TODO: remove after testing.
-    test_data = [(1.00, 0, 3, 3, 18.0),
-                 (2.75, 0, 3, 3, 20.0)]
+    color_method = color_method.strip().lower()
 
     assert color_method in COLOR_METHODS, f'{color_method} is an unknown colour method.'
 
-    # Build up the data based on the provided colour method.
-    data_points = []  # Each data point which we have read in from file.
+    data_raw = process_file(file_, normalise) if file_ is not None else EXAMPLE_DATA  # The raw data from file.
+    data_processed = []  # The data after processing it into DataPoint classes.
+    events = []  # The data after taking into account colour patterns and overlapping data points.
 
-    if color_method == 'energy':
+    if color_method == 'energy':  # Base the colouring on the energy of the detection. Energy-specific code is highlighted with ***.
 
-        for t, s, x, y, e in test_data:  # time, side, x, y, energy. # TODO: don't use test_data.
-            num_ticks = DataPoint.get_num_ticks_from_energy(e, energy_tick_rate)
+        for t, ID, s, x, y, e in data_raw:  # time, crystal_ID, side, x, y, energy.
+            num_ticks = DataPoint.get_num_ticks_from_energy(e, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
             alight_time = DataPoint.get_alight_time(num_ticks, gradient_delay)
 
-            data_points.append(DataPoint(x, y, e, num_ticks, start_time=t, end_time=t+alight_time))
+            data_processed.append(DataPoint(x, y, e, num_ticks, start_time=t, end_time=t+alight_time))
 
-        data_points = sorted(data_points)  # Sorted based on start_time.
+        data_processed = sorted(data_processed)  # Sorted based on start_time.
 
         # We need to make sure that any hits on pixels that are already lit up do not overwrite, but instead add, energy to the pixel.
-        for n, dA in enumerate(data_points):  # d for data point.
+        for n, dA in enumerate(data_processed):  # d for data point.
 
             # Only bother look at data points ahead of the currently considered one.
-            for dB in data_points[n+1:]:
+            for dB in data_processed[n+1:]:
 
                 # We're looking for data points that hit the same pixel and iB starts before the end of iA.
                 if (dA.x == dB.x) and (dA.y == dB.y) and (dB.start_time < dA.end_time):
@@ -64,17 +63,96 @@ def process_data(file_=None,
                     dB.energy += dA.energy - dA.ticks * energy_tick_rate
 
                     # Now re-compute the (greater) number of ticks for the latter iB event.
-                    dB.ticks = DataPoint.get_num_ticks_from_energy(dB.energy, energy_tick_rate)
+                    dB.ticks = DataPoint.get_num_ticks_from_energy(dB.energy, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
 
                     break
 
 
-        data = sum([d.get_events(color_gradient, energy_tick_rate, gradient_delay) for d in data_points], [])
+        # *** We get the events based on the energy. ***
+        events += sum([d.get_energy_events(color_gradient, energy_tick_rate, gradient_delay) for d in data_processed], [])
 
     else:
         raise ValueError(f'{color_method} is an unknown colour method.')
 
-    return data
+    # Make sure the events are in time order.
+    events = sorted(events)
+
+    # All events at the moment are individual pixel updates.
+    # Let's group multiple pixel updates together into a single event, IF they are very close together in time.
+    events = group_events(events)
+
+    return events
+
+
+def process_file(file_, normalise=False):
+    assert isinstance(file_, str)
+    assert isinstance(normalise, bool)  # Do we want to normalise the time data to be between 0 and 30 sec?
+
+    data = loadtxt(file_)
+
+    assert data.shape[0] > 0, f'No data in file {file_}.'
+    assert data.shape[1] == 6, 'Number of columns of data should be 6.'
+
+    time, ID, side, x, y, energy = zip(*data)
+
+    time = list(map(float, time))
+    ID = list(map(int, ID))
+    side = list(map(int, side))
+    x = list(map(int, x))
+    y = list(map(int, y))
+    energy = list(map(float, energy))
+
+    assert all(t >= 0.0 for t in time), 'Data point with time < 0.'
+    assert all(s in (0, 1) for s in side), 'Data point with side not equal to 0 or 1.'
+    assert all(x_i >= 0 for x_i in x), 'Data point with x pixel < 0.'
+    assert all(y_i >= 0 for y_i in y), 'Data point with y pixel < 0.'
+    assert all(e >= 0.0 for e in energy), 'Data point with energy < 0.'
+
+    if normalise:
+        minimum = min(time)
+        difference = max(time) - minimum
+        factor = 30.0
+
+        time = [factor * (t - minimum) / (difference) for t in time]
+
+    return zip(time, ID, side, x, y, energy)
+
+
+def group_events(events):
+    assert all(isinstance(e, Event) for e in events)
+
+    grouped_events = []
+
+    n = 0  # Manual counter, so we can avoid already-processed events.
+
+    while n < len(events):
+        event = events[n]
+
+        x_values = event.x_values
+        y_values = event.y_values
+        colors = event.colors
+
+        count = 0
+
+        # Loop through events ahead of this.
+        for future_event in events[n+1:]:
+
+            # If the future event start time is very close to this event, get its data.
+            if (future_event.start_time - event.start_time) < EVENT_TIME_DIFFERENCE_TOLERANCE:
+                x_values += future_event.x_values
+                y_values += future_event.y_values
+                colors += future_event.colors
+
+                count += 1  # Record how many events we have processed.
+
+            else:
+                break  # We can stop looking as the events are ordered.
+
+        grouped_events.append(Event(x_values, y_values, colors, event.start_time))
+
+        n += count + 1  # `count` number of future events processed. +1 for `event` itself.
+
+    return grouped_events
 
 
 class DataPoint:
@@ -99,8 +177,8 @@ class DataPoint:
     def __repr__(self):
         return f'({self.x},{self.y})  {self.energy:6.2f}  {self.ticks}  {self.start_time:6.2f}  {self.end_time:6.2f}'
 
-    def get_events(self, color_gradient=COLOR_GRADIENT_DEFAULT,
-                        energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gradient_delay=GRADIENT_DELAY):
+    def get_energy_events(self, color_gradient=COLOR_GRADIENT_DEFAULT,
+                                energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gradient_delay=GRADIENT_DELAY):
         events = []
 
         for tick in range(self.ticks+1):
@@ -108,7 +186,7 @@ class DataPoint:
 
             color = COLOR_DEFAULT if energy <= 0.0 else get_color_from_gradient(energy, color_gradient)
 
-            events.append(Event(self.x, self.y, color, self.start_time+tick*gradient_delay))
+            events.append(Event([self.x], [self.y], [color], self.start_time+tick*gradient_delay))  # x, y, color are lists.
 
         return events
 
@@ -126,19 +204,29 @@ class DataPoint:
 
 
 class Event:
-    def __init__(self, x, y, color, start_time):
-        assert isinstance(x, int)
-        assert isinstance(y, int)
-        assert isinstance(color, int)
+    def __init__(self, x_values, y_values, colors, start_time):
+        assert all(isinstance(x, int) for x in x_values)
+        assert all(isinstance(y, int) for y in y_values)
+        assert all(isinstance(color, int) for color in colors)
+        assert all(255 >= color >= 0 for color in colors)
         assert isinstance(start_time, (float, int))
 
-        assert 255 >= color >= 0, 'Colour number should be between 0 and 255.'
-
-        self.x = x
-        self.y = y
-        self.color = color
+        self.x_values = x_values
+        self.y_values = y_values
+        self.colors = colors
         self.start_time = start_time
 
+    def __iter__(self):
+        return iter(zip(self.x_values, self.y_values, self.colors))
+
+    def __lt__(self, other):
+        return self.start_time < other.start_time
+
     def __repr__(self):
-        return f'({self.x},{self.y})  {self.color}  {self.start_time:6.2f}'
+        s = ''
+
+        for x, y, color in self:
+            s += f'({x},{y})  {color}  {self.start_time:6.2f}\n'
+
+        return s[:-1]
 

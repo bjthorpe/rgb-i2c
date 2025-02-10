@@ -54,8 +54,13 @@ COLORS = {
 
 COLOR_DEFAULT = COLORS.get('black')
 
-COLOR_GRADIENT_DEFAULT = ([25.0, 20.0, 15.0, 10.0,  5.0],  # Anything up to this value...
-                          [50,   40,   30,   20,   10])    # will have the following colour.
+# The default colour gradient pattern is based on the energies.
+COLOR_GRADIENT_DEFAULT = ([50.0, 47.5, 42.5, 37.5, 32.5, 22.5, 12.5, 2.5],  # Anything up to this energy value...
+                          [ 254,  125,  135,  145,  155,  165,  175, 185])  # ... will have the following colour.
+
+# Was mainly used for testing.
+COLOR_GRADIENT_OTHER = ([25.0, 20.0, 15.0, 10.0,  5.0],  # Anything up to this energy value...
+                        [50,   40,   30,   20,   10])    # ... will have the following colour.
 
 COLOR_METHODS = ['energy']  # What should decide how the colours of the pixels change?
 COLOR_METHOD_DEFAULT = 'energy'  # What should decide how the colours change?
@@ -73,4 +78,8 @@ DEVICE_NUM_MAX = 119 # Maximum device number sensible as in `i2cdetect -y 1`
 FRAME_RATE = 1.0 / 30.0 # How often is the frame manager updated?
 
 GRADIENT_DELAY = 0.5  # How long is the default between colour changes of pixels?
+
+EVENT_TIME_DIFFERENCE_TOLERANCE = 0.001  # If two pixel light-ups are within this time frame, then they are updated at the same time.
+
+EXAMPLE_DATA = [(1.00, 999, 0, 3, 3, 18.0), (2.75, 999, 0, 3, 3, 20.0)]
 
