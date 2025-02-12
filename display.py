@@ -5,13 +5,12 @@ from time import sleep
 from parameters import DEFAULT_I2C_ADDR, I2C_CMD_DISP_OFF, I2C_CMD_GET_DEV_ID, \
     I2C_CMD_DISP_EMOJI, I2C_CMD_DISP_NUM, I2C_CMD_DISP_CUSTOM, I2C_CMD_CONTINUE_DATA, \
     DEVICE_NUM_MIN, DEVICE_NUM_MAX, \
-    COLORS, WAIT_READ, WAIT_WRITE
+    COLORS, COLOR_DEFAULT, WAIT_READ, WAIT_WRITE
 
-from pixel import Pixel
 from utility import int_to_bytes
 
 
-def create_displays(bus):
+def get_displays(bus):
     assert isinstance(bus, SMBus)
 
     displays = {}
@@ -44,15 +43,13 @@ def clear_displays(bus, displays):
 
 class Display:
     def __init__(self, size=8, side=0, X=0, Y=0,
-                 ID=0, address=DEFAULT_I2C_ADDR,
-                 double_buffering=True):
+                 ID=0, address=DEFAULT_I2C_ADDR):
         assert isinstance(size, int)
         assert isinstance(side, int)
         assert isinstance(X, int)
         assert isinstance(Y, int)
         assert isinstance(ID, int)
         assert isinstance(address, int)
-        assert isinstance(double_buffering, bool)
 
         assert size == 8, 'HARD CODED SIZE OF 8 FOR NOW.'  # TODO: displays are currently hard coded to a size of 8x8.
         assert size > 0, 'Size of display must be > 0.'
@@ -68,10 +65,9 @@ class Display:
         self.Y = Y
         self.ID = ID
         self.addr = address
-        self.dbl_buff = double_buffering
 
-        self.frame_A = [Pixel() for _ in range(self.size * self.size)]
-        self.frame_B = deepcopy(self.frame_A) if self.dbl_buff else None
+        self.frame_A = [COLOR_DEFAULT for _ in range(self.size * self.size)]  # [Pixel() for _ in range(self.size * self.size)]
+        self.frame_B = deepcopy(self.frame_A)
 
         self.display_frame_A = True  # Do we use the A or B frame for displaying?
         self.change_detected = False  # Has a change been detected on this display from the data manager?
@@ -99,7 +95,7 @@ class Display:
 
         bus.write_byte_data(self.addr, I2C_CMD_DISP_OFF, 0)
 
-    def display_emoji(self, bus, emoji, duration=1, forever=True):
+    def display_emoji(self, bus, emoji, duration=1, forever=False):
         assert isinstance(bus, SMBus)
         assert isinstance(emoji, int)
         assert isinstance(duration, (float, int))
@@ -115,7 +111,7 @@ class Display:
         sleep(WAIT_WRITE)
     
     
-    def display_number(self, bus, number, color='blue', duration=1, forever=True):
+    def display_number(self, bus, number, color='blue', duration=1, forever=False):
         assert isinstance(bus, SMBus)
         assert isinstance(number, int)
         assert isinstance(color, str)
@@ -136,7 +132,7 @@ class Display:
         sleep(WAIT_WRITE)
     
     
-    def display_pixel(self, bus, x, y, color='blue', duration=1, forever=True):
+    def display_pixel(self, bus, x, y, color='blue', duration=1, forever=False):
         assert isinstance(bus, SMBus)
         assert isinstance(x, int)
         assert isinstance(y, int)
@@ -149,11 +145,11 @@ class Display:
             
         num_frames = 1 # For now.
         
-        frame = [COLORS['black']] * 64 # Start as blank frame.
-        index = x + 8 * y # 2D index to integer.
-        frame[index] = COLORS[color] # Colour the requested pixel.
+        frame = [COLORS['black']] * self.size * self.size  # Start as blank frame.
+        index = x + self.size * y  # 2D index to integer.
+        frame[index] = COLORS[color]  # Colour the requested pixel.
     
-        duration_bytes = int_to_bytes(int(duration * 1000)) # Duration is in ms.
+        duration_bytes = int_to_bytes(int(duration * 1000))  # Duration is in ms.
         
         # Data of the frame.
         # The latter 3 zeroes are redundant data.
@@ -168,7 +164,7 @@ class Display:
         bus.write_i2c_block_data(self.addr, I2C_CMD_CONTINUE_DATA, frame[32:])  # TODO: remove assumption that we have 8x8.
         sleep(WAIT_WRITE)
 
-    def display_current_frame(self, bus, duration=1, forever=True):
+    def display_current_frame(self, bus, duration=1, forever=False):
         assert isinstance(bus, SMBus)
         assert isinstance(duration, (float, int))
         assert isinstance(forever, bool)
@@ -181,7 +177,7 @@ class Display:
         # The latter 3 zeroes are redundant data.
         data = [duration_bytes[1], duration_bytes[0], forever, 1, 0, 0, 0]  # The 1 is the number of frames.
 
-        frame = [p.color for p in self.frame_A] if self.display_frame_A else [p.color for p in self.frame_B]
+        frame = self.frame_A if self.display_frame_A else self.frame_B
 
         # Now send the data.
         # Maximum of 32 bytes allowed per send, so the 71 pieces of info are split into 3 chunks of 7, 32, 32.
@@ -192,22 +188,7 @@ class Display:
         bus.write_i2c_block_data(self.addr, I2C_CMD_CONTINUE_DATA, frame[32:])  # TODO: remove assumption that we have 8x8.
         sleep(WAIT_WRITE)
 
-    def check_pixel_changes(self, tick):
-        assert isinstance(tick, (float, int))
-
-        assert tick > 0.0, 'Tick should be > 0.0.'
-
-        for pixel in self.frame_A if not self.display_frame_A else self.frame_B:
-            pixel.check_change(tick)
-
-        self.change_detected = self.change_detected or \
-            any(pixel.change_detected for pixel in (self.frame_A if not self.display_frame_A else self.frame_B))
-
-    def apply_pixel_changes(self):
-        for pixel in self.frame_A if not self.display_frame_A else self.frame_B:
-            pixel.apply_change()
-
-    def update_pixel(self, x, y, color):
+    def set_buffer_pixel(self, x, y, color):
         ''' Updates whichever frame is not in use for displaying with a provided pixel co-ordinate and colour. '''
 
         assert isinstance(x, int)
@@ -217,44 +198,16 @@ class Display:
         assert 255 >= color >= 0, 'Colour number should be between 0 and 255.'
 
         if self.display_frame_A:                                         
-            self.frame_B[x + self.size * y].color = color
+            self.frame_B[x + self.size * y] = color
         else:
-            self.frame_A[x + self.size * y].color = color
-
-    def update_pixel_gradient(self, x, y, gradient, timers=None):
-        assert isinstance(x, int)
-        assert isinstance(y, int)
-
-        assert x < self.size, 'Pixel requested out of x bounds.'
-        assert y < self.size, 'Pixel requested out of y bounds.'
-
-        if self.display_frame_A:
-            self.frame_B[x + 8 * y].set_gradient(gradient, timers)
-        else:
-            self.frame_A[x + 8 * y].set_gradient(gradient, timers)
-
-        self.change_detected = True
-
-    def update_frame(self, frame):
-        assert all(isinstance(i, Pixel) for i in frame)
-
-        assert len(frame) == self.size * self.size
-
-        if self.display_frame_A:
-            self.frame_B = frame
-        else:
-            self.frame_A = frame
-
-        self.change_detected = True
+            self.frame_A[x + self.size * y] = color
 
     def copy_buffer(self):
-        if self.dbl_buff:
-            if self.display_frame_A:
-                self.frame_B = deepcopy(self.frame_A)
-            else:
-                self.frame_A = deepcopy(self.frame_B)
+        if self.display_frame_A:
+            self.frame_B = deepcopy(self.frame_A)
+        else:
+            self.frame_A = deepcopy(self.frame_B)
 
     def switch_buffer(self):
-        if self.dbl_buff:
-            self.display_frame_A = not self.display_frame_A
+        self.display_frame_A = not self.display_frame_A
 
