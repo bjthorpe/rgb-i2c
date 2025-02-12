@@ -2,8 +2,9 @@ from manager import run
 
 
 # Temporary data file for testing.
-temp_file = 'testingTEMP1.dat'
-normalise_time_data = True
+temp_file = 'testingTEMP7.dat'  # Data file.
+layout = (1,)  # 1 display for now.
+normalise_time_data = True  # Should we re-normalise the times of the data between 0 and 30 sec?
 
-run(temp_file, normalise_time_data)
+run(temp_file, layout, normalise_time_data)
 

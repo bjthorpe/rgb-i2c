@@ -9,45 +9,60 @@ from utility import wait_for_matrix_ready
 
 
 def reset():
+    global g_bus
     global g_displays
+    global g_updates
     global g_break
 
-    g_displays = dict()  # Dictionary of displays. {ID (int) : display (Display)}.
+    g_bus = None  # The SMBus.
+    g_displays = [] # List of displays.
     g_updates = []  # A list of bools that signals for the display buffer to update which displays.
     g_break = False  # Global break statement so each thread knows when to quit.
 
 
-def initialise():
-    global bus
-
-    bus = SMBus(1)
-
-    wait_for_matrix_ready()
+def initialise(layout=None):
+    global g_bus
+    global g_displays
+    global g_updates
 
     reset()
 
+    g_bus = SMBus(1)
+
+    wait_for_matrix_ready()
+
+    g_displays = get_displays(g_bus, layout)
+
+    g_updates = [False] * len(g_displays)
+
+    assert len(g_displays) > 0, 'No displays found.'
+
+    clear_displays(g_bus, g_displays)
+
+
 
 def display_manager():
-    global bus
+    global g_bus
     global g_displays
     global g_updates
     global g_break
 
     while True:
-        for ID, display in g_displays.items():
-            if g_updates[ID]:
-                display.display_current_frame(bus, forever=True)  # forever=True as timing is handled by the data manager.
+        for display in g_displays:
+            if g_updates[display.ID]:
+                display.display_current_frame(g_bus, forever=True)  # forever=True as timing is handled by the data manager.
 
-                g_updates[ID] = False
+                g_updates[display.ID] = False
 
         sleep(WAIT_DISPLAY)
 
         if g_break:
+            clear_displays(g_bus, g_displays)
             break
 
 
 def data_manager(file_=None, normalise_time_data=False):
-    global bus
+    global g_bus
     global g_displays
     global g_updates
     global g_break
@@ -57,18 +72,13 @@ def data_manager(file_=None, normalise_time_data=False):
 
     assert isinstance(normalise_time_data, bool)
 
-    # A dictionary to store which display is represent what data points. TODO: automate this.
-    xy_to_display_ID = {(i, j): 0 for i in range(8) for j in range(8)}
-
-    data = process_data(file_, normalise=normalise_time_data)
+    data = process_data(file_, g_displays, normalise=normalise_time_data)
 
     time_last_error_msg = -999.0
     previous_start_time = 0.0
 
     first_pass = True
     no_new_data = False
-
-    t1 = time()
 
     while True:
         start_time = time()
@@ -83,16 +93,12 @@ def data_manager(file_=None, normalise_time_data=False):
             g_break = True
 
         if g_break:
-            break  # TODO: Consider clearing each display.
+            break
 
         # First, go and get all the IDs of the displays that are to be updated.
         updated_display_IDs = set()
 
-        for x, y, color in event:
-            ID = xy_to_display_ID.get((x, y), None)
-
-            assert ID is not None, f'Cannot find a display to show pixel ({x},{y}).'
-
+        for x, y, color, ID in event:
             updated_display_IDs.add(ID)
 
         # Then, use the set here so we only copy the buffers once.
@@ -100,9 +106,7 @@ def data_manager(file_=None, normalise_time_data=False):
             g_displays[ID].copy_buffer()
 
         # Finally, actually do the pixel updates.
-        for x, y, color in event:
-            ID = xy_to_display_ID.get((x, y), None)
-
+        for x, y, color, ID in event:
             g_displays[ID].set_buffer_pixel(x, y, color)
 
         end_time = time()
@@ -125,13 +129,9 @@ def data_manager(file_=None, normalise_time_data=False):
 
         first_pass = False
 
-    t2 = time()
 
-    print('Time taken', t2-t1)
-
-
-def run(file_=None, normalise_time_data=False):
-    global bus
+def run(file_=None, layout=None, normalise_time_data=False):
+    global g_bus
     global g_displays
     global g_updates
 
@@ -140,17 +140,14 @@ def run(file_=None, normalise_time_data=False):
 
     assert isinstance(normalise_time_data, bool)
 
-    initialise()
+    time_start = time()
 
-    g_displays = get_displays(bus)
-    g_updates = [False] * len(g_displays)
-    assert len(g_displays) > 0, 'No displays found.'
-    clear_displays(bus, g_displays)
+    initialise(layout)
 
     thread_display = Thread(target=display_manager, name='Display')
     thread_data = Thread(target=data_manager, args=(file_, normalise_time_data), name='Data')
 
-    start_time = time()
+    time_middle = time()
 
     thread_display.start()
     thread_data.start()
@@ -158,8 +155,12 @@ def run(file_=None, normalise_time_data=False):
     thread_display.join()
     thread_data.join()
 
-    end_time = time()
+    time_end = time()
 
-    clear_displays(bus, g_displays)
+    print('Initialisation time', time_middle-time_start)
+    print('Run time', time_end-time_middle)
+
+    clear_displays(g_bus, g_displays)
+
     reset()
 

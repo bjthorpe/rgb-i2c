@@ -1,4 +1,5 @@
 from copy import deepcopy
+from numpy import ceil, sqrt
 from smbus import SMBus
 from time import sleep
 
@@ -10,12 +11,18 @@ from parameters import DEFAULT_I2C_ADDR, I2C_CMD_DISP_OFF, I2C_CMD_GET_DEV_ID, \
 from utility import int_to_bytes
 
 
-def get_displays(bus):
+def get_displays(bus, layout=None):
     assert isinstance(bus, SMBus)
 
-    displays = {}
+    if layout is not None:
+        if isinstance(layout, int):
+            layout = (layout,)  # If a single number is supplied, turn it into a tuple.
+        else:
+            assert isinstance(layout, tuple)
+            assert all(isinstance(i, int) for i in layout)
 
-    current_ID = 0
+    # Let's first work out how many displays we have by collecting the addresses.
+    addresses = []
 
     for device in range(DEVICE_NUM_MIN, DEVICE_NUM_MAX+1):
         found = False
@@ -28,17 +35,64 @@ def get_displays(bus):
             pass
 
         if found:
-            displays[current_ID] = Display(ID=current_ID, address=device)
+            addresses.append(device)
+
+    # If a layout was supplied, ensure we have at least enough devices.
+    if layout is not None:
+        assert len(addresses) >= sum(layout), f'Requested layout size is {sum(layout)}, but only {len(addresses)} display(s) found.'
+
+        # We only keep those that are needed if a layout is supplied.
+        layout = layout[:sum(layout)]
+
+    else:  # Just create a dummy layout if none was supplied.
+        layout = (len(addresses),)
+
+    # Let's now create the Display objects.
+    displays = []
+
+    # The side, X and Y data for each display.
+    coordinates = [[divmod(n, int(ceil(sqrt(side_size)))) for n in range(side_size)] for side_size in layout]
+
+    current_ID = 0
+
+    for (side, YXs) in enumerate(coordinates):
+        for Y, X in YXs:  # divmod() gives (Y, X) co-ordinates so need to be careful.
+            displays.append(Display(side=side, X=X, Y=Y, ID=current_ID, address=addresses[current_ID]))
             current_ID += 1
 
     return displays
 
 
+def switch_displays(display_A, display_B):
+    assert isinstance(display_A, Display)
+    assert isinstance(display_B, Display)
+
+    display_A.addr, display_B.addr = display_B.addr, display_A.addr
+
+
 def clear_displays(bus, displays):
     assert isinstance(bus, SMBus)
 
-    for display in displays.values():
+    for display in displays:
         display.clear_display(bus)
+
+
+def get_display_ID(displays, x, y, side):
+    ''' Returns the display which handles the given global (x, y) co-ordinate and side. '''
+
+    assert len(displays) > 0, 'No displays found.'
+    assert len({d.size for d in displays}) == 1, 'Can currently only work with all displays of equal size.'
+
+    display_size = displays[0].size  # We are assuming they are all the same size.
+
+    X = x // display_size  # This is the display.X value we want to search for.
+    Y = y // display_size  # This is the display.Y value we want to search for.
+
+    for display in displays:
+        if (display.X == X) and (display.Y == Y) and (display.side == side):
+            return display.ID
+
+    raise ValueError(f'Could not find display to show pixel ({x}, {y}) on side {side}.')
 
 
 class Display:
@@ -53,7 +107,7 @@ class Display:
 
         assert size == 8, 'HARD CODED SIZE OF 8 FOR NOW.'  # TODO: displays are currently hard coded to a size of 8x8.
         assert size > 0, 'Size of display must be > 0.'
-        assert side in (0, 1), 'Only two possible sides at the moment, 0 and 1.'
+        assert side >= 0, 'Side must be >= 0.'
         assert X >= 0, 'X location of display should be >= 0.'
         assert Y >= 0, 'Y location of display should be >= 0.'
         assert ID >= 0, 'Device ID should be >= 0.'
@@ -72,6 +126,9 @@ class Display:
         self.display_frame_A = True  # Do we use the A or B frame for displaying?
         self.change_detected = False  # Has a change been detected on this display from the data manager?
         self.needs_updating = False  # So the display thread knows whether to bother updating this display or not.
+
+    def __repr__(self):
+        return f'{self.addr}: ({self.X},{self.Y}) side {self.side}'
 
     def get_VID(self, bus):
         assert isinstance(bus, SMBus)
