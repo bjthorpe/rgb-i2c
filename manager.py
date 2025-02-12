@@ -96,10 +96,7 @@ def data_manager(file_=None, normalise_time_data=False):
             break
 
         # First, go and get all the IDs of the displays that are to be updated.
-        updated_display_IDs = set()
-
-        for x, y, color, ID in event:
-            updated_display_IDs.add(ID)
+        updated_display_IDs = set(event.display_IDs)
 
         # Then, use the set here so we only copy the buffers once.
         for ID in updated_display_IDs:
