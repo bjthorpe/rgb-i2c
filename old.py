@@ -127,3 +127,48 @@ def manager_data_live():
     print('Time taken', t2-t1)
 '''
 
+
+'''
+class Display:
+    def update_pixel_gradient(self, x, y, gradient, timers=None):
+        assert isinstance(x, int)
+        assert isinstance(y, int)
+
+        assert x < self.size, 'Pixel requested out of x bounds.'
+        assert y < self.size, 'Pixel requested out of y bounds.'
+
+        if self.display_frame_A:
+            self.frame_B[x + 8 * y].set_gradient(gradient, timers)
+        else:
+            self.frame_A[x + 8 * y].set_gradient(gradient, timers)
+
+        self.change_detected = True
+
+    def update_frame(self, frame):
+        assert all(isinstance(i, Pixel) for i in frame)
+
+        assert len(frame) == self.size * self.size
+
+        if self.display_frame_A:
+            self.frame_B = frame
+        else:
+            self.frame_A = frame
+
+        self.change_detected = True
+
+    def check_pixel_changes(self, tick):
+        assert isinstance(tick, (float, int))
+
+        assert tick > 0.0, 'Tick should be > 0.0.'
+
+        for pixel in self.frame_A if not self.display_frame_A else self.frame_B:
+            pixel.check_change(tick)
+
+        self.change_detected = self.change_detected or \
+            any(pixel.change_detected for pixel in (self.frame_A if not self.display_frame_A else self.frame_B))
+
+    def apply_pixel_changes(self):
+        for pixel in self.frame_A if not self.display_frame_A else self.frame_B:
+            pixel.apply_change()
+'''
+

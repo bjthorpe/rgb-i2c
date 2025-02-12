@@ -3,7 +3,7 @@ from threading import Thread
 from time import sleep, time
 
 from data import process_data
-from display import clear_displays, create_displays
+from display import clear_displays, get_displays
 from parameters import FRAME_RATE, EVENT_TIME_DIFFERENCE_TOLERANCE, WAIT_DISPLAY
 from utility import wait_for_matrix_ready
 
@@ -36,7 +36,7 @@ def display_manager():
     while True:
         for ID, display in g_displays.items():
             if g_updates[ID]:
-                display.display_current_frame(bus)
+                display.display_current_frame(bus, forever=True)  # forever=True as timing is handled by the data manager.
 
                 g_updates[ID] = False
 
@@ -103,7 +103,7 @@ def data_manager(file_=None, normalise_time_data=False):
         for x, y, color in event:
             ID = xy_to_display_ID.get((x, y), None)
 
-            g_displays[ID].update_pixel(x, y, color)
+            g_displays[ID].set_buffer_pixel(x, y, color)
 
         end_time = time()
 
@@ -142,7 +142,7 @@ def run(file_=None, normalise_time_data=False):
 
     initialise()
 
-    g_displays = create_displays(bus)
+    g_displays = get_displays(bus)
     g_updates = [False] * len(g_displays)
     assert len(g_displays) > 0, 'No displays found.'
     clear_displays(bus, g_displays)
