@@ -114,19 +114,22 @@ class Display:
     def display_number(self, bus, number, color='blue', duration=1, forever=False):
         assert isinstance(bus, SMBus)
         assert isinstance(number, int)
-        assert isinstance(color, str)
+        assert isinstance(color, (str, int))
         assert isinstance(duration, (float, int))
         assert isinstance(forever, bool)
     
         assert duration > 0.001, 'Error: duration should be at least 1 ms.'
-        assert color in COLORS.keys(), f'Error: invalid colour {color} must be one of {COLORS.keys()}.'
-    
+
+        if isinstance(color, str):
+            assert color in COLORS.keys(), f'Error: invalid colour {color} must be one of {COLORS.keys()}.'
+            color = COLORS[color]
+        elif isinstance(color, int):
+            assert 255 >= color >= 0, 'Colour number should be between 0 and 255.'
+
         number_bytes = int_to_bytes(number)
         duration_bytes = int_to_bytes(int(duration * 1000)) # Duration is in ms.
     
-        data = [number_bytes[1], number_bytes[0], 
-                duration_bytes[1], duration_bytes[0],
-                forever, COLORS[color]]
+        data = [number_bytes[1], number_bytes[0], duration_bytes[1], duration_bytes[0], forever, color]
     
         bus.write_i2c_block_data(self.addr, I2C_CMD_DISP_NUM, data)
         sleep(WAIT_WRITE)
@@ -136,18 +139,25 @@ class Display:
         assert isinstance(bus, SMBus)
         assert isinstance(x, int)
         assert isinstance(y, int)
-        assert isinstance(color, str)
+        assert isinstance(color, (str, int))
         assert isinstance(duration, (float, int))
         assert isinstance(forever, bool)
-    
+
+        assert self.size > x >= 0, 'Error: x value supplied is outside of frame range.'
+        assert self.size > y >= 0, 'Error: y value supplied is outside of frame range.'
         assert duration > 0.001, 'Error: duration should be at least 1 ms.'
-        assert color in COLORS.keys(), f'Error: invalid colour {color} must be one of {COLORS.keys()}'
-            
+
+        if isinstance(color, str):
+            assert color in COLORS.keys(), f'Error: invalid colour {color} must be one of {COLORS.keys()}'
+            color = COLORS[color]
+        elif isinstance(color, int):
+            assert 255 >= color >= 0, 'Colour number should be between 0 and 255.'
+
         num_frames = 1 # For now.
         
         frame = [COLORS['black']] * self.size * self.size  # Start as blank frame.
         index = x + self.size * y  # 2D index to integer.
-        frame[index] = COLORS[color]  # Colour the requested pixel.
+        frame[index] = color  # Colour the requested pixel.
     
         duration_bytes = int_to_bytes(int(duration * 1000))  # Duration is in ms.
         
@@ -195,6 +205,8 @@ class Display:
         assert isinstance(y, int)
         assert isinstance(color, int)
 
+        assert self.size > x >= 0, 'Error: x value supplied is outside of frame range.'
+        assert self.size > y >= 0, 'Error: y value supplied is outside of frame range.'
         assert 255 >= color >= 0, 'Colour number should be between 0 and 255.'
 
         if self.display_frame_A:                                         
