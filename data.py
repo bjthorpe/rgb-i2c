@@ -63,9 +63,11 @@ def process_data(file_,
                     # The energy of the latter iB event will be itself plus |the energy of the initial iA event minus the amount it has decayed by|.
                     dB.energy += dA.energy - dA.ticks * energy_tick_rate
 
-                    # Now re-compute the (greater) number of ticks for the latter iB event.
+                    # Now re-compute the (greater) number of ticks and the (later) end time for the latter iB event.
                     dB.ticks = DataPoint.get_num_ticks_from_energy(dB.energy, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
+                    dB.end_time = dB.start_time + DataPoint.get_alight_time(dB.ticks, gradient_delay)
 
+                    # If dA overlaps with a dC, this will be dealt with by dB, so may as well break here to save time.
                     break
 
 
@@ -238,7 +240,7 @@ class Event:
     def __repr__(self):
         s = ''
 
-        for x, y, color in self:
+        for x, y, color, display_ID in self:
             s += f'({x},{y})  {color}  {self.start_time:6.2f}\n'
 
         return s[:-1]
