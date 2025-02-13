@@ -11,19 +11,16 @@ from utility import wait_for_matrix_ready
 def reset():
     global g_bus
     global g_displays
-    global g_updates
     global g_break
 
     g_bus = None  # The SMBus.
     g_displays = [] # List of displays.
-    g_updates = []  # A list of bools that signals for the display buffer to update which displays.
     g_break = False  # Global break statement so each thread knows when to quit.
 
 
 def initialise(layout=None):
     global g_bus
     global g_displays
-    global g_updates
 
     reset()
 
@@ -32,8 +29,6 @@ def initialise(layout=None):
     wait_for_matrix_ready()
 
     g_displays = get_displays(g_bus, layout)
-
-    g_updates = [False] * len(g_displays)
 
     assert len(g_displays) > 0, 'No displays found.'
 
@@ -44,15 +39,14 @@ def initialise(layout=None):
 def display_manager():
     global g_bus
     global g_displays
-    global g_updates
     global g_break
 
     while True:
         for display in g_displays:
-            if g_updates[display.ID]:
+            if display.needs_updating:
                 display.display_current_frame(g_bus, forever=True)  # forever=True as timing is handled by the data manager.
 
-                g_updates[display.ID] = False
+                display.needs_updating = False
 
         sleep(WAIT_DISPLAY)
 
@@ -64,7 +58,6 @@ def display_manager():
 def data_manager(file_=None, normalise_time_data=False):
     global g_bus
     global g_displays
-    global g_updates
     global g_break
 
     if file_ is not None:
@@ -122,7 +115,7 @@ def data_manager(file_=None, normalise_time_data=False):
         # The pre-processed event is now ready to be displayed, switch the buffers and set the update flags for the display thread.
         for ID in updated_display_IDs:
             g_displays[ID].switch_buffer()
-            g_updates[ID] = True
+            g_displays[ID].needs_updating = True
 
         first_pass = False
 
@@ -130,7 +123,6 @@ def data_manager(file_=None, normalise_time_data=False):
 def run(file_=None, layout=None, normalise_time_data=False):
     global g_bus
     global g_displays
-    global g_updates
 
     if file_ is not None:
         assert isinstance(file_, str)
