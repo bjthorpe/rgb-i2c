@@ -11,8 +11,9 @@ from parameters import DEFAULT_I2C_ADDR, I2C_CMD_DISP_OFF, I2C_CMD_GET_DEV_ID, \
 from utility import int_to_bytes
 
 
-def get_displays(bus, layout=None):
+def get_displays(bus, layout=None, force=False):
     assert isinstance(bus, SMBus)
+    assert isinstance(force, bool)  # Can we reuse displays if not enough are found for the requested layout?
 
     if layout is not None:
         if isinstance(layout, int):
@@ -22,27 +23,18 @@ def get_displays(bus, layout=None):
             assert all(isinstance(i, int) for i in layout)
 
     # Let's first work out how many displays we have by collecting the addresses.
-    addresses = []
-
-    for device in range(DEVICE_NUM_MIN, DEVICE_NUM_MAX+1):
-        found = False
-
-        try:
-            bus.read_byte(device)
-            sleep(WAIT_READ)
-            found = True
-        except OSError:
-            pass
-
-        if found:
-            addresses.append(device)
+    addresses = get_addresses(bus)
 
     # If a layout was supplied, ensure we have at least enough devices.
     if layout is not None:
-        assert len(addresses) >= sum(layout), f'Requested layout size is {sum(layout)}, but only {len(addresses)} display(s) found.'
+        if len(addresses) < sum(layout):
+            if not force:
+                raise ValueError(f'Requested layout size is {sum(layout)}, but only {len(addresses)} display(s) found.')
+            else:
+                addresses *= 1 + sum(layout) // len(addresses)  # Duplicate addresses until we have enough.
 
-        # We only keep those that are needed if a layout is supplied.
-        layout = layout[:sum(layout)]
+        # We only keep the addresses that are needed if a layout is supplied.
+        addresses = addresses[:sum(layout)]
 
     else:  # Just create a dummy layout if none was supplied.
         layout = (len(addresses),)
@@ -61,6 +53,27 @@ def get_displays(bus, layout=None):
             current_ID += 1
 
     return displays
+
+
+def get_addresses(bus):
+    assert isinstance(bus, SMBus)
+
+    addresses = []
+
+    for device in range(DEVICE_NUM_MIN, DEVICE_NUM_MAX+1):
+        found = False
+
+        try:
+            bus.read_byte(device)
+            sleep(WAIT_READ)
+            found = True
+        except OSError:
+            pass
+
+        if found:
+            addresses.append(device)
+
+    return addresses
 
 
 def switch_displays(display_A, display_B):

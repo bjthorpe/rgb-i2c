@@ -22,7 +22,7 @@ def reset():
     g_break = False  # Global break statement so each thread knows when to quit.
 
 
-def initialise(layout=None):
+def initialise(layout=None, force_displays=False):
     global g_bus
     global g_displays
 
@@ -32,7 +32,7 @@ def initialise(layout=None):
 
     wait_for_matrix_ready()
 
-    g_displays = get_displays(g_bus, layout)
+    g_displays = get_displays(g_bus, layout, force_displays)
 
     assert len(g_displays) > 0, 'No displays found.'
 
@@ -120,18 +120,19 @@ def data_manager(data):
         first_pass = False
 
 
-def run(file_=None, layout=None, normalise=False):
+def run(file_=None, layout=None, force_displays=False, normalise=False):
     global g_bus
     global g_displays
 
     if file_ is not None:
         assert isinstance(file_, str)
 
+    assert isinstance(force_displays, bool)
     assert isinstance(normalise, bool)
 
     time_start = time()
 
-    initialise(layout)
+    initialise(layout, force_displays)
 
     data = process_data(file_, g_displays, normalise=normalise)
 
