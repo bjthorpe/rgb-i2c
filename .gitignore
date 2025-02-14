@@ -175,3 +175,4 @@ timings.prof
 
 # Data for testing.
 testing*.dat
+test_data/

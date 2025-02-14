@@ -2,10 +2,14 @@ from smbus import SMBus
 from threading import Thread
 from time import sleep, time
 
-from data import process_data
+from data import Event, process_data
 from display import clear_displays, get_displays
 from parameters import FRAME_RATE, EVENT_TIME_DIFFERENCE_TOLERANCE, WAIT_DISPLAY
 from utility import wait_for_matrix_ready
+
+
+def get_bus():
+    return SMBus(1)
 
 
 def reset():
@@ -24,7 +28,7 @@ def initialise(layout=None):
 
     reset()
 
-    g_bus = SMBus(1)
+    g_bus = get_bus()
 
     wait_for_matrix_ready()
 
@@ -55,17 +59,13 @@ def display_manager():
             break
 
 
-def data_manager(file_=None, normalise_time_data=False):
+def data_manager(data):
     global g_bus
     global g_displays
     global g_break
 
-    if file_ is not None:
-        assert isinstance(file_, str)
-
-    assert isinstance(normalise_time_data, bool)
-
-    data = process_data(file_, g_displays, normalise=normalise_time_data)
+    assert isinstance(data, (list, tuple))
+    assert all(isinstance(d, Event) for d in data)
 
     time_last_error_msg = -999.0
     previous_start_time = 0.0
@@ -120,21 +120,23 @@ def data_manager(file_=None, normalise_time_data=False):
         first_pass = False
 
 
-def run(file_=None, layout=None, normalise_time_data=False):
+def run(file_=None, layout=None, normalise=False):
     global g_bus
     global g_displays
 
     if file_ is not None:
         assert isinstance(file_, str)
 
-    assert isinstance(normalise_time_data, bool)
+    assert isinstance(normalise, bool)
 
     time_start = time()
 
     initialise(layout)
 
+    data = process_data(file_, g_displays, normalise=normalise)
+
     thread_display = Thread(target=display_manager, name='Display')
-    thread_data = Thread(target=data_manager, args=(file_, normalise_time_data), name='Data')
+    thread_data = Thread(target=data_manager, args=(data,), name='Data')
 
     time_middle = time()
 
