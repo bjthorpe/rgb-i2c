@@ -3,7 +3,7 @@ from numpy import loadtxt
 from display import Display, get_display_ID
 from parameters import COLOR_DEFAULT, COLOR_GRADIENT_DEFAULT, COLOR_METHODS, COLOR_METHOD_DEFAULT, \
                        ENERGY_TICK_RATE_DEFAULT, EVENT_TIME_DIFFERENCE_TOLERANCE, GRADIENT_DELAY, EXAMPLE_DATA
-from utility import get_color_from_gradient
+from utility import get_color_from_gradient, get_num_ticks, get_quantity
 
 
 def process_data(file_,
@@ -35,8 +35,8 @@ def process_data(file_,
     if color_method == 'energy':  # Base the colouring on the energy of the detection. Energy-specific code is highlighted with ***.
 
         for t, ID, x, y, s, e in data_raw:  # time, crystal_ID, x, y, side, energy.
-            num_ticks = DataPoint.get_num_ticks_from_energy(e, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
-            alight_time = DataPoint.get_alight_time(num_ticks, gradient_delay)
+            num_ticks = get_num_ticks(e, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
+            alight_time = get_quantity(num_ticks, gradient_delay)  # How long should this pixel be lit up for?
 
             data_processed.append(DataPoint(x, y, s, e, num_ticks, start_time=t, end_time=t+alight_time))
 
@@ -55,7 +55,7 @@ def process_data(file_,
 
                     # Therefore, we erase the ticks of the initial iA event that would occur after iB has started.
                     # This includes remove the final background colour tick of iA, which iB will now deal with.
-                    dA.ticks -= DataPoint.get_num_ticks_from_time(dA.end_time-dB.start_time, gradient_delay)
+                    dA.ticks -= get_num_ticks(dA.end_time-dB.start_time, gradient_delay)
 
                     # The initial iA event end time is now equal to the latter iB event start time.
                     dA.end_time = dB.start_time
@@ -64,15 +64,14 @@ def process_data(file_,
                     dB.energy += dA.energy - dA.ticks * energy_tick_rate
 
                     # Now re-compute the (greater) number of ticks and the (later) end time for the latter iB event.
-                    dB.ticks = DataPoint.get_num_ticks_from_energy(dB.energy, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
-                    dB.end_time = dB.start_time + DataPoint.get_alight_time(dB.ticks, gradient_delay)
+                    dB.ticks = get_num_ticks(dB.energy, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
+                    dB.end_time = dB.start_time + get_quantity(dB.ticks, gradient_delay)  # Start time + alight time.
 
                     # If dA overlaps with a dC, this will be dealt with by dB, so may as well break here to save time.
                     break
 
-
         # *** We get the events based on the energy. ***
-        events += sum([d.get_energy_events(displays, color_gradient, energy_tick_rate, gradient_delay) for d in data_processed], [])
+        events += sum([get_energy_events(data_point, displays, color_gradient, energy_tick_rate, gradient_delay) for data_point in data_processed], [])
 
     else:
         raise ValueError(f'{color_method} is an unknown colour method.')
@@ -124,6 +123,8 @@ def process_file(file_, normalise=False):
 
 
 def group_events(events):
+    ''' Group events together that occur within the EVENT_TIME_DIFFERENCE_TOLERANCE. '''
+
     assert all(isinstance(e, Event) for e in events)
 
     grouped_events = []
@@ -162,6 +163,30 @@ def group_events(events):
     return grouped_events
 
 
+def get_energy_events(data_point, displays, color_gradient=COLOR_GRADIENT_DEFAULT,
+                      energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gradient_delay=GRADIENT_DELAY):
+    ''' This takes a DataPoint and creates the associated events based on the energy. For example,
+        if a data point is a pixel light-up with 13eV, then if the energy_tick_rate is 5eV, then
+        the events will be a 13eV colour, 8eV colour `gradient_delay` seconds later, 3 eV colour
+        `gradient_delay` seconds later, 0 eV (blank) colour `gradient_delay` seconds later. '''
+
+    events = []
+
+    for tick in range(data_point.ticks+1):
+        energy = data_point.energy - tick * energy_tick_rate
+
+        color = COLOR_DEFAULT if energy <= 0.0 else get_color_from_gradient(energy, color_gradient)
+
+        display_ID = get_display_ID(displays, data_point.x, data_point.y, data_point.side)
+
+        x = data_point.x % displays[display_ID].size  # Turns global x into local.
+        y = data_point.y % displays[display_ID].size  # Turns global y into local.
+
+        events.append(Event([x], [y], [color], [display_ID], data_point.start_time+tick*gradient_delay))  # x, y, color, ID are lists.
+
+    return events
+
+
 class DataPoint:
     def __init__(self, x, y, side, energy, ticks, start_time, end_time):
         assert isinstance(x, int)
@@ -185,36 +210,6 @@ class DataPoint:
 
     def __repr__(self):
         return f'({self.x},{self.y})  {self.energy:6.2f}  {self.ticks}  {self.start_time:6.2f}  {self.end_time:6.2f}'
-
-    def get_energy_events(self, displays, color_gradient=COLOR_GRADIENT_DEFAULT,
-                                energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gradient_delay=GRADIENT_DELAY):
-        events = []
-
-        for tick in range(self.ticks+1):
-            energy = self.energy - tick * energy_tick_rate
-
-            color = COLOR_DEFAULT if energy <= 0.0 else get_color_from_gradient(energy, color_gradient)
-
-            display_ID = get_display_ID(displays, self.x, self.y, self.side)
-
-            x = self.x % displays[display_ID].size  # Turns global x into local.
-            y = self.y % displays[display_ID].size  # Turns global y into local.
-
-            events.append(Event([x], [y], [color], [display_ID], self.start_time+tick*gradient_delay))  # x, y, color, ID are lists.
-
-        return events
-
-    @staticmethod
-    def get_num_ticks_from_energy(energy, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT):
-        return 1 + int(energy // energy_tick_rate)
-
-    @staticmethod
-    def get_num_ticks_from_time(time_, gradient_delay=GRADIENT_DELAY):
-        return 1 + int(time_ // gradient_delay)
-
-    @staticmethod
-    def get_alight_time(num_ticks, gradient_delay=GRADIENT_DELAY):
-        return num_ticks * gradient_delay
 
 
 class Event:
