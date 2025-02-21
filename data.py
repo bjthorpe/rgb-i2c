@@ -1,14 +1,16 @@
-from numpy import loadtxt
+from numpy import loadtxt, inf
 
 from display import Display, get_display_ID
 from parameters import COLOR_DEFAULT, COLOR_GRADIENT_DEFAULT, COLOR_METHODS, COLOR_METHOD_DEFAULT, \
-                       ENERGY_TICK_RATE_DEFAULT, EVENT_TIME_DIFFERENCE_TOLERANCE, GRADIENT_DELAY, EXAMPLE_DATA
+                       ENERGY_METHODS, ENERGY_METHOD_DEFAULT, ENERGY_TICK_RATE_DEFAULT, \
+                       EVENT_TIME_DIFFERENCE_TOLERANCE, GRADIENT_DELAY, EXAMPLE_DATA
 from utility import get_color_from_gradient, get_num_ticks, get_quantity
 
 
 def process_data(file_,
                  displays,
                  color_method=COLOR_METHOD_DEFAULT,
+                 energy_method=ENERGY_METHOD_DEFAULT,
                  energy_tick_rate=ENERGY_TICK_RATE_DEFAULT,
                  gradient_delay=GRADIENT_DELAY,
                  color_gradient=COLOR_GRADIENT_DEFAULT,
@@ -25,56 +27,26 @@ def process_data(file_,
     assert isinstance(normalise, bool)  # Do we want to normalise the time of the data to have on avg. 100 data points per 30 sec?
 
     color_method = color_method.strip().lower()
+    energy_method = energy_method.strip().lower()
 
     assert color_method in COLOR_METHODS, f'{color_method} is an unknown colour method.'
+    assert energy_method in ENERGY_METHODS, f'{energy_method} is an unknown energy method.'
 
     data_raw = process_file(file_, normalise)  # The raw data from file.
-    data_processed = []  # The data after processing it into DataPoint classes.
-    events = []  # The data after taking into account colour patterns and overlapping data points.
 
-    if color_method == 'energy':  # Base the colouring on the energy of the detection. Energy-specific code is highlighted with ***.
+    if color_method == 'energy':  # Base the colouring on the energy of the detection.
 
-        for t, ID, x, y, s, e in data_raw:  # time, crystal_ID, x, y, side, energy.
-            num_ticks = get_num_ticks(e, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
-            alight_time = get_quantity(num_ticks, gradient_delay)  # How long should this pixel be lit up for?
+        # Collect the list of DataPoints, accounting for the energy method.
+        if energy_method == 'accumulate':
+            data_processed = get_energy_accum_data(data_raw)
+        elif energy_method == 'tick':
+            data_processed = get_energy_tick_data(data_raw)
 
-            data_processed.append(DataPoint(x, y, s, e, num_ticks, start_time=t, end_time=t+alight_time))
-
-        data_processed = sorted(data_processed)  # Sorted based on start_time.
-
-        # We need to make sure that any hits on pixels that are already lit up do not overwrite, but instead add, energy to the pixel.
-        for n, dA in enumerate(data_processed):  # d for data point.
-
-            # Only bother look at data points ahead of the currently considered one.
-            for dB in data_processed[n+1:]:
-
-                # We're looking for data points that hit the same pixel and iB starts before the end of iA.
-                if (dA.x == dB.x) and (dA.y == dB.y) and (dB.start_time < dA.end_time):
-
-                    # An event, dB, occurs within the time frame that dA is still alight.
-
-                    # Therefore, we erase the ticks of the initial iA event that would occur after iB has started.
-                    # This includes remove the final background colour tick of iA, which iB will now deal with.
-                    dA.ticks -= get_num_ticks(dA.end_time-dB.start_time, gradient_delay)
-
-                    # The initial iA event end time is now equal to the latter iB event start time.
-                    dA.end_time = dB.start_time
-
-                    # The energy of the latter iB event will be itself plus |the energy of the initial iA event minus the amount it has decayed by|.
-                    dB.energy += dA.energy - dA.ticks * energy_tick_rate
-
-                    # Now re-compute the (greater) number of ticks and the (later) end time for the latter iB event.
-                    dB.ticks = get_num_ticks(dB.energy, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
-                    dB.end_time = dB.start_time + get_quantity(dB.ticks, gradient_delay)  # Start time + alight time.
-
-                    # If dA overlaps with a dC, this will be dealt with by dB, so may as well break here to save time.
-                    break
-
-        # *** We get the events based on the energy. ***
-        events += sum([get_energy_events(data_point, displays, color_gradient, energy_tick_rate, gradient_delay) for data_point in data_processed], [])
-
-    else:
-        raise ValueError(f'{color_method} is an unknown colour method.')
+        # Now turn the DataPoints into events, accounting for the energy method.
+        if energy_method == 'accumulate':
+            events = get_energy_accum_events(data_processed, displays, color_gradient)
+        elif energy_method == 'tick':
+            events = get_energy_tick_events(data_processed, displays, color_gradient, energy_tick_rate, gradient_delay)
 
     # Make sure the events are in time order.
     events = sorted(events)
@@ -163,32 +135,141 @@ def group_events(events):
     return grouped_events
 
 
-def get_energy_events(data_point, displays, color_gradient=COLOR_GRADIENT_DEFAULT,
-                      energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gradient_delay=GRADIENT_DELAY):
-    ''' This takes a DataPoint and creates the associated events based on the energy. For example,
-        if a data point is a pixel light-up with 13eV, then if the energy_tick_rate is 5eV, then
-        the events will be a 13eV colour, 8eV colour `gradient_delay` seconds later, 3 eV colour
-        `gradient_delay` seconds later, 0 eV (blank) colour `gradient_delay` seconds later. '''
+def get_energy_accum_data(data_raw):
+    ''' Takes in the raw data, and returns the organised data points. This initially
+        gets the data points with their own energy. It then ensures the data is sorted
+        and the energies of the pixels updated to be accumulative. '''
+
+    data_processed = []
+
+    for t, ID, x, y, s, e in data_raw:  # time, crystal_ID, x, y, side, energy.
+        data_processed.append(DataPoint(x, y, s, e, start_time=t))
+
+    data_processed = sorted(data_processed)  # Sorted based on start_time.
+
+    # We need to make the energy of the data point equal to itself plus the previous energy of the pixel.
+    # If there are no hits of the pixel before data point, then its energy is left unchanged.
+    for n, dA in enumerate(data_processed):  # d for data point.
+
+        # We ignore the first data point as this will never need its energy updated.
+        if n == 0:
+            continue
+
+        # Only bother look at data points before the currently considered one **in reverse**.
+        for dB in data_processed[n-1::-1]:
+
+            # We're looking for data points that hit the same pixel.
+            if (dA.x == dB.x) and (dA.y == dB.y):
+
+                # Both data points hit the same pixel. The energy of dA should be itself plus dB.
+                dA.energy += dB.energy
+
+                # Don't want to add any energies, as we would be double counting.
+                break
+
+    return data_processed
+
+
+def get_energy_tick_data(data_raw, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gradient_delay=GRADIENT_DELAY):
+    ''' Takes in the raw data, and returns the organised data points. This initially
+        gets the number of ticks and thus the alight-time of the data point. It then
+        also carefully checks if any of the data points overlap in time and thus need
+        to be merged. '''
+
+    data_processed = []
+
+    for t, ID, x, y, s, e in data_raw:  # time, crystal_ID, x, y, side, energy.
+        num_ticks = get_num_ticks(e, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
+        alight_time = get_quantity(num_ticks, gradient_delay)  # How long should this pixel be lit up for?
+
+        data_processed.append(DataPoint(x, y, s, e, num_ticks, start_time=t, end_time=t+alight_time))
+
+    data_processed = sorted(data_processed)  # Sorted based on start_time.
+
+    # We need to make sure that any hits on pixels that are already lit up do not overwrite, but instead add, energy to the pixel.
+    for n, dA in enumerate(data_processed):  # d for data point.
+
+        # Only bother look at data points ahead of the currently considered one.
+        for dB in data_processed[n+1:]:
+
+            # We're looking for data points that hit the same pixel and iB starts before the end of iA.
+            if (dA.x == dB.x) and (dA.y == dB.y) and (dB.start_time < dA.end_time):
+
+                # An event, dB, occurs within the time frame that dA is still alight.
+
+                # Therefore, we erase the ticks of the initial iA event that would occur after iB has started.
+                # This includes remove the final background colour tick of iA, which iB will now deal with.
+                dA.ticks -= get_num_ticks(dA.end_time-dB.start_time, gradient_delay)
+
+                # The initial iA event end time is now equal to the latter iB event start time.
+                dA.end_time = dB.start_time
+
+                # The energy of the latter iB event will be itself plus |the energy of the initial iA event minus the amount it has decayed by|.
+                dB.energy += dA.energy - dA.ticks * energy_tick_rate
+
+                # Now re-compute the (greater) number of ticks and the (later) end time for the latter iB event.
+                dB.ticks = get_num_ticks(dB.energy, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
+                dB.end_time = dB.start_time + get_quantity(dB.ticks, gradient_delay)  # Start time + alight time.
+
+                # If dA overlaps with a dC, this will be dealt with by dB, so may as well break here to save time.
+                break
+
+    return data_processed
+
+
+def get_energy_accum_events(data_points, displays, color_gradient=COLOR_GRADIENT_DEFAULT):
+    ''' get_energy_accum_data should be used before this to obtain the data_points. '''
+    ''' This takes a DataPoint and creates the associated events based on the energy,
+        given the energy_method is accumulate. This is just one event per data point. '''
 
     events = []
 
-    for tick in range(data_point.ticks+1):
-        energy = data_point.energy - tick * energy_tick_rate
-
-        color = COLOR_DEFAULT if energy <= 0.0 else get_color_from_gradient(energy, color_gradient)
+    for data_point in data_points:
+        color = COLOR_DEFAULT if data_point.energy <= 0.0 else get_color_from_gradient(data_point.energy, color_gradient)
 
         display_ID = get_display_ID(displays, data_point.x, data_point.y, data_point.side)
 
         x = data_point.x % displays[display_ID].size  # Turns global x into local.
         y = data_point.y % displays[display_ID].size  # Turns global y into local.
 
-        events.append(Event([x], [y], [color], [display_ID], data_point.start_time+tick*gradient_delay))  # x, y, color, ID are lists.
+        events.append(Event([x], [y], [color], [display_ID], data_point.start_time))  # x, y, color, ID are lists.
+
+    # Add an extra event at the end so the display doesn't vanish immediately.
+    if len(events) > 0:
+        e = events[-1]
+        events.append(Event(e.x_values, e.y_values, e.colors, e.display_IDs, e.start_time+1.0))  # 1 second later.
+
+    return events
+
+
+def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_DEFAULT,
+                           energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gradient_delay=GRADIENT_DELAY):
+    ''' get_energy_tick_data should be used before this to obtain the data_points. '''
+    ''' This takes a DataPoint and creates the associated events based on the energy, given the energy_method
+        is ticks. For example, if a data point is a pixel light-up with 13eV, then if the energy_tick_rate is
+        5eV, then the events will be a 13eV colour, 8eV colour `gradient_delay` seconds later, 3 eV colour
+        `gradient_delay` seconds later, 0 eV (blank) colour `gradient_delay` seconds later. '''
+
+    events = []
+
+    for data_point in data_points:
+        for tick in range(data_point.ticks+1):
+            energy = data_point.energy - tick * energy_tick_rate
+
+            color = COLOR_DEFAULT if energy <= 0.0 else get_color_from_gradient(energy, color_gradient)
+
+            display_ID = get_display_ID(displays, data_point.x, data_point.y, data_point.side)
+
+            x = data_point.x % displays[display_ID].size  # Turns global x into local.
+            y = data_point.y % displays[display_ID].size  # Turns global y into local.
+
+            events.append(Event([x], [y], [color], [display_ID], data_point.start_time+tick*gradient_delay))  # x, y, color, ID are lists.
 
     return events
 
 
 class DataPoint:
-    def __init__(self, x, y, side, energy, ticks, start_time, end_time):
+    def __init__(self, x, y, side=0, energy=0.0, ticks=0, start_time=0.0, end_time=inf):
         assert isinstance(x, int)
         assert isinstance(y, int)
         assert isinstance(side, int)
@@ -209,11 +290,11 @@ class DataPoint:
         return self.start_time < other.start_time
 
     def __repr__(self):
-        return f'({self.x},{self.y})  {self.energy:6.2f}  {self.ticks}  {self.start_time:6.2f}  {self.end_time:6.2f}'
+        return f'({self.x},{self.y})  {self.energy:6.2f}  {self.start_time:6.2f}'
 
 
 class Event:
-    def __init__(self, x_values, y_values, colors, display_IDs, start_time):
+    def __init__(self, x_values, y_values, colors, display_IDs, start_time=0.0):
         assert all(isinstance(x, int) for x in x_values)
         assert all(isinstance(y, int) for y in y_values)
         assert all(isinstance(color, int) for color in colors)

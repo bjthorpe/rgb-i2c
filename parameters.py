@@ -65,6 +65,9 @@ COLOR_GRADIENT_OTHER = ([25.0, 20.0, 15.0, 10.0,  5.0],  # Anything up to this e
 COLOR_METHODS = ['energy']  # What should decide how the colours of the pixels change?
 COLOR_METHOD_DEFAULT = 'energy'  # What should decide how the colours change?
 
+ENERGY_METHODS = ['accumulate', 'tick']
+ENERGY_METHOD_DEFAULT = 'accumulate'  # Should the energy of a pixel tick away over time or accumulate over time?
+
 ENERGY_TICK_RATE_DEFAULT = 5.0  # Every `GRADIENT_DELAY` seconds, the energy of a pixel should decay by how much?
 
 WAIT_WRITE = 0.001 # Time to wait for Bus after a write statement.
