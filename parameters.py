@@ -86,3 +86,5 @@ EVENT_TIME_DIFFERENCE_TOLERANCE = 0.001  # If two pixel light-ups are within thi
 
 EXAMPLE_DATA = [(1.00, 999, 0, 3, 3, 18.0), (2.75, 999, 0, 3, 3, 20.0)]
 
+LETTERS = list('ABCDEFGJKLMPQRTUVWY')  # Usable letters for arranging the displays. These have no awkward symmetries.
+

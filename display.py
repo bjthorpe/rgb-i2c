@@ -3,9 +3,9 @@ from numpy import ceil, sqrt
 from smbus import SMBus
 from time import sleep
 
-from parameters import DEFAULT_I2C_ADDR, I2C_CMD_DISP_OFF, I2C_CMD_GET_DEV_ID, \
-    I2C_CMD_DISP_EMOJI, I2C_CMD_DISP_NUM, I2C_CMD_DISP_CUSTOM, I2C_CMD_CONTINUE_DATA, \
-    DEVICE_NUM_MIN, DEVICE_NUM_MAX, \
+from parameters import DEFAULT_I2C_ADDR, I2C_CMD_DISP_OFF, I2C_CMD_GET_DEV_ID, I2C_CMD_SET_ADDR, \
+    I2C_CMD_DISP_EMOJI, I2C_CMD_DISP_NUM, I2C_CMD_DISP_STR, I2C_CMD_DISP_CUSTOM, I2C_CMD_CONTINUE_DATA, \
+    DEVICE_NUM_MIN, DEVICE_NUM_MAX, LETTERS, \
     COLORS, COLOR_DEFAULT, WAIT_READ, WAIT_WRITE
 
 from utility import int_to_bytes
@@ -74,6 +74,25 @@ def get_addresses(bus):
             addresses.append(device)
 
     return addresses
+
+
+def display_arranger(bus, displays):
+    # TODO: check.
+    # TODO: consider display.side
+    assert len(displays) <= len(LETTERS), 'Cannot display more than {len(LETTERS)} displays.'
+
+    len_X = max(display.X for display in displays) + 1
+    len_Y = max(display.Y for display in displays) + 1
+
+    letters = [''] * len_Y
+
+    for display in displays:
+        letter = LETTERS[display.X * len_X + display.Y]
+        display.display_string(bus, letter, forever=True)
+        letters[display.X] += ' ' + letter
+
+    for row in letters:
+        print(row)
 
 
 def switch_displays(display_A, display_B):
@@ -160,6 +179,8 @@ class Display:
 
         bus.write_byte_data(self.addr, I2C_CMD_SET_ADDR, new_address)
 
+        self.addr = new_address
+
     def clear_display(self, bus):
         assert isinstance(bus, SMBus)
 
@@ -179,7 +200,6 @@ class Display:
     
         bus.write_i2c_block_data(self.addr, I2C_CMD_DISP_EMOJI, data)
         sleep(WAIT_WRITE)
-    
     
     def display_number(self, bus, number, color='blue', duration=1, forever=False):
         assert isinstance(bus, SMBus)
@@ -203,7 +223,30 @@ class Display:
     
         bus.write_i2c_block_data(self.addr, I2C_CMD_DISP_NUM, data)
         sleep(WAIT_WRITE)
+
+    def display_string(self, bus, string, color='blue', duration=1, forever=False):
+        assert isinstance(bus, SMBus)
+        assert isinstance(string, str)
+        assert isinstance(color, (str, int))
+        assert isinstance(duration, (float, int))
+        assert isinstance(forever, bool)
     
+        assert duration > 0.001, 'Error: duration should be at least 1 ms.'
+
+        if isinstance(color, str):
+            assert color in COLORS.keys(), f'Error: invalid colour {color} must be one of {COLORS.keys()}.'
+            color = COLORS[color]
+        elif isinstance(color, int):
+            assert 255 >= color >= 0, 'Colour number should be between 0 and 255.'
+
+        assert len(string) <= 27, 'Length of string too long to display.'
+
+        duration_bytes = int_to_bytes(int(duration * 1000)) # Duration is in ms.
+    
+        data = [forever, duration_bytes[1], duration_bytes[0], len(string), color] + list(string.encode('ascii'))
+    
+        bus.write_i2c_block_data(self.addr, I2C_CMD_DISP_STR, data)
+        sleep(WAIT_WRITE)
     
     def display_pixel(self, bus, x, y, color='blue', duration=1, forever=False):
         assert isinstance(bus, SMBus)
