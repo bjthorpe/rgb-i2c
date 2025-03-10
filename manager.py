@@ -4,7 +4,8 @@ from time import sleep, time
 
 from data import Event, process_data
 from display import clear_displays, get_displays
-from parameters import FRAME_RATE, EVENT_TIME_DIFFERENCE_TOLERANCE, WAIT_DISPLAY
+from parameters import FRAME_RATE, EVENT_TIME_DIFFERENCE_TOLERANCE, WAIT_DISPLAY, \
+                       ENERGY_METHOD_DEFAULT
 from utility import wait_for_matrix_ready
 
 
@@ -120,7 +121,9 @@ def data_manager(data):
         first_pass = False
 
 
-def run(file_=None, layout=None, force_displays=False, normalise=False):
+def run(file_=None, layout=None,
+        energy_method=ENERGY_METHOD_DEFAULT,
+        force_displays=False, normalise=False):
     global g_bus
     global g_displays
 
@@ -134,7 +137,7 @@ def run(file_=None, layout=None, force_displays=False, normalise=False):
 
     initialise(layout, force_displays)
 
-    data = process_data(file_, g_displays, normalise=normalise)
+    data = process_data(file_, g_displays, energy_method=energy_method, normalise=normalise)
 
     thread_display = Thread(target=display_manager, name='Display')
     thread_data = Thread(target=data_manager, args=(data,), name='Data')

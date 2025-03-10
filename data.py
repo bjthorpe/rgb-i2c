@@ -24,7 +24,7 @@ def process_data(file_,
     assert isinstance(color_gradient, tuple)
     assert len(color_gradient) == 2
     assert all(isinstance(energy, (float, int)) and isinstance(color, int) for energy, color in zip(*color_gradient))
-    assert isinstance(normalise, bool)  # Do we want to normalise the time of the data to have on avg. 100 data points per 30 sec?
+    assert isinstance(normalise, bool)  # Do we want to normalise the time of the data to have on avg. 100 data points per 5 sec?
 
     color_method = color_method.strip().lower()
     energy_method = energy_method.strip().lower()
@@ -60,7 +60,7 @@ def process_data(file_,
 
 def process_file(file_, normalise=False):
     assert isinstance(file_, str)
-    assert isinstance(normalise, bool)  # Do we want to normalise the time data to have on avg. 100 data points per 30 sec?
+    assert isinstance(normalise, bool)  # Do we want to normalise the time data to have on avg. 100 data points per 5 sec?
 
     data = loadtxt(file_)
 
@@ -87,7 +87,7 @@ def process_file(file_, normalise=False):
         minimum = min(time)
         difference = max(time) - minimum
         num_data_points = data.shape[0]
-        factor = 30.0 * float(num_data_points) / 100.0
+        factor = 5.0 * float(num_data_points) / 100.0
 
         time = [factor * (t - minimum) / (difference) for t in time]
 

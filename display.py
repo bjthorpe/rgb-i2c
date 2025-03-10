@@ -79,20 +79,33 @@ def get_addresses(bus):
 def display_arranger(bus, displays):
     # TODO: check.
     # TODO: consider display.side
-    assert len(displays) <= len(LETTERS), 'Cannot display more than {len(LETTERS)} displays.'
 
-    len_X = max(display.X for display in displays) + 1
-    len_Y = max(display.Y for display in displays) + 1
+    num_sides = max([display.side for display in displays]) + 1
 
-    letters = [''] * len_Y
+    for side in range(num_sides):
+        len_X = max([display.X for display in displays]) + 1
+        len_Y = max([display.Y for display in displays]) + 1
+
+        array = [['' for _ in range(len_X)] for _ in range(len_Y)]
+
+        for display in displays:
+            if display.side == side:
+                array[display.Y][display.X] = display.char
+
+        string = f'Side {side} ->\n'
+
+        for rows in array:
+            string += '  '
+
+            for char in rows:
+                string += char + ' '
+
+            string = string[:-1] + '\n'
+
+        print(string[:-1])
 
     for display in displays:
-        letter = LETTERS[display.X * len_X + display.Y]
-        display.display_string(bus, letter, forever=True)
-        letters[display.X] += ' ' + letter
-
-    for row in letters:
-        print(row)
+        display.display_string(bus, display.char, forever=True)
 
 
 def switch_displays(display_A, display_B):
@@ -142,7 +155,7 @@ class Display:
         assert side >= 0, 'Side must be >= 0.'
         assert X >= 0, 'X location of display should be >= 0.'
         assert Y >= 0, 'Y location of display should be >= 0.'
-        assert ID >= 0, 'Device ID should be >= 0.'
+        assert len(LETTERS) >= ID >= 0, f'Device ID should be {len(LETTERS)} >= 0.'
         assert DEVICE_NUM_MAX >= address >= DEVICE_NUM_MIN, f'Device address {address} outside of sensible range.'
 
         self.size = size
@@ -150,6 +163,7 @@ class Display:
         self.X = X
         self.Y = Y
         self.ID = ID
+        self.char = LETTERS[ID]
         self.addr = address
 
         self.frame_A = [COLOR_DEFAULT for _ in range(self.size * self.size)]  # [Pixel() for _ in range(self.size * self.size)]
@@ -178,6 +192,7 @@ class Display:
         assert DEVICE_NUM_MAX >= new_address >= DEVICE_NUM_MIN, f'Device address {address} outside of sensible range.'
 
         bus.write_byte_data(self.addr, I2C_CMD_SET_ADDR, new_address)
+        sleep(WAIT_WRITE)
 
         self.addr = new_address
 
