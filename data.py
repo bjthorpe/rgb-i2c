@@ -1,7 +1,8 @@
 from numpy import loadtxt, inf
 
 from display import Display, get_display_ID
-from parameters import COLOR_DEFAULT, COLOR_GRADIENT_DEFAULT, COLOR_METHODS, COLOR_METHOD_DEFAULT, \
+from parameters import MODES, MODE_DEFAULT, \
+                       COLOR_DEFAULT, COLOR_GRADIENT_DEFAULT, COLOR_METHODS, COLOR_METHOD_DEFAULT, \
                        ENERGY_METHODS, ENERGY_METHOD_DEFAULT, ENERGY_TICK_RATE_DEFAULT, \
                        EVENT_TIME_DIFFERENCE_TOLERANCE, GRADIENT_DELAY, EXAMPLE_DATA
 from utility import get_color_from_gradient, get_num_ticks, get_quantity
@@ -9,6 +10,7 @@ from utility import get_color_from_gradient, get_num_ticks, get_quantity
 
 def process_data(file_,
                  displays,
+                 mode=MODE_DEFAULT,
                  color_method=COLOR_METHOD_DEFAULT,
                  energy_method=ENERGY_METHOD_DEFAULT,
                  energy_tick_rate=ENERGY_TICK_RATE_DEFAULT,
@@ -26,13 +28,47 @@ def process_data(file_,
     assert all(isinstance(energy, (float, int)) and isinstance(color, int) for energy, color in zip(*color_gradient))
     assert isinstance(normalise, bool)  # Do we want to normalise the time of the data to have on avg. 100 data points per 5 sec?
 
+    mode = mode.strip().lower()
     color_method = color_method.strip().lower()
     energy_method = energy_method.strip().lower()
 
+    assert mode in MODES, f'{mode} is an unknown mode.'
     assert color_method in COLOR_METHODS, f'{color_method} is an unknown colour method.'
     assert energy_method in ENERGY_METHODS, f'{energy_method} is an unknown energy method.'
 
-    data_raw = process_file(file_, normalise)  # The raw data from file.
+    data_raw = process_file(file_, mode=mode, normalise=normalise)  # The raw data from file.
+
+    if mode == 'normal':
+
+        # In normal mode, we simply show all the events and colour by the user defined parameters.
+        # There is no work to do.
+
+        pass
+
+    elif mode == 'phase':
+
+        # In phase mode, we require 2 sides to the layout, each of 2x2 displays.
+        displays_dict = {0: [(display.X, display.Y) for display in displays if display.side == 0],
+                         1: [(display.X, display.Y) for display in displays if display.side == 1]}
+
+        assert (0, 0) in displays_dict[0]
+        assert (0, 1) in displays_dict[0]
+        assert (1, 0) in displays_dict[0]
+        assert (1, 1) in displays_dict[0]
+        assert (0, 0) in displays_dict[1]
+        assert (0, 1) in displays_dict[1]
+        assert (1, 0) in displays_dict[1]
+        #assert (1, 1) in displays_dict[1]  # FIXME: ADD THIS BACK IN.
+
+        # The process_file function has already ordered the data for us.
+        # The first half of the data is for help with the phase diagram.
+        # The second half of the data is to be display on side 1 as it would in 'normal' mode.
+
+        data_phase = data_raw[:len(data_raw)//2]
+        data_raw = data_raw[len(data_raw)//2:]
+
+        # Let's go and process the data_raw as normal, and then tie in the phase data after.
+
 
     if color_method == 'energy':  # Base the colouring on the energy of the detection.
 
@@ -41,6 +77,23 @@ def process_data(file_,
             data_processed = get_energy_accum_data(data_raw)
         elif energy_method == 'tick':
             data_processed = get_energy_tick_data(data_raw)
+
+
+    # Before creating the events, we need to tie in some phase data first.
+    if mode == 'phase':
+        # TODO: calculate phase of DataPoint in data_processed - call this DataPointA.
+        # TODO: calculate phase of data point in data_phase - call this DataPointB.
+        # TODO: calculate difference between the phases of DataPointA and DataPointB.
+        # TODO: increment the appropriate phase-angle-bin.
+        # TODO: renormalise the phase-angle-bin quantities.
+        # TODO: work out if there are any changes in pixels on the phase data screen.
+        # TODO: if so, add these pixel changes to the DataPointA.
+        # TODO: order the data in the DataPointA to be COLOR_DEFAULT changes FIRST, and the others LAST.
+        # TODO: allow the code to continue on as normal!
+        print(data_processed);exit()
+
+
+    if color_method == 'energy':  # Base the colouring on the energy of the detection.
 
         # Now turn the DataPoints into events, accounting for the energy method.
         if energy_method == 'accumulate':
@@ -58,8 +111,9 @@ def process_data(file_,
     return events
 
 
-def process_file(file_, normalise=False):
+def process_file(file_, mode=MODE_DEFAULT, normalise=False):
     assert isinstance(file_, str)
+    assert isinstance(mode, str)
     assert isinstance(normalise, bool)  # Do we want to normalise the time data to have on avg. 100 data points per 5 sec?
 
     data = loadtxt(file_)
@@ -67,6 +121,9 @@ def process_file(file_, normalise=False):
     assert len(data.shape) == 2, 'Need more than 1 data point.'  # Dealing with numpy's awkward shape size.
     assert data.shape[0] > 0, f'No data in file {file_}.'
     assert data.shape[1] == 6, 'Number of columns of data should be 6.'
+
+    if mode == 'phase':
+        assert data.shape[0] % 4 == 0, 'Phase mode requires 4 pieces of data for each event.'
 
     time, ID, side, x, y, energy = zip(*data)
 
@@ -78,10 +135,53 @@ def process_file(file_, normalise=False):
     energy = list(map(float, energy))
 
     assert all(t >= 0.0 for t in time), 'Data point with time < 0.'
-    assert all(s in (0, 1) for s in side), 'Data point with side not equal to 0 or 1.'
+    assert all(s in (0, 1) for s in side), 'Data point with side not equal to 0 or 1.'  # TODO: relax this condition?
     assert all(x_i >= 0 for x_i in x), 'Data point with x pixel < 0.'
     assert all(y_i >= 0 for y_i in y), 'Data point with y pixel < 0.'
     assert all(e >= 0.0 for e in energy), 'Data point with energy < 0.'
+
+    if mode == 'phase':
+        assert all(s in (0, 1) for s in side), 'Need only side 0 and 1 for phase mode.'
+
+        # Side 0 will show a diagram of phase data.
+        # Side 1 will show its data just as in mode=='normal'
+        # DataPoint 1: Absorption/scatter on detector 0 with x,y,energy.
+        # DataPoint 2: Absorption/scatter on detector 0 with x,y,energy.
+        # DataPoint 3: Absorption/scatter on detector 1 with x,y,energy.
+        # DataPoint 4: Absorption/scatter on detector 1 with x,y,energy.
+        # We split up this data into two sets - that to be displayed normally and the corresponding data to create the phase diagram.
+        # The phase data comes first and then the data to display normally.
+
+        time0, time1 = [], []
+        side0, side1 = [], []
+        x0, x1 = [], []
+        y0, y1 = [], []
+        energy0, energy1 = [], []
+
+        for n, s in enumerate(side):
+            if n % 4 in (0, 1):
+                assert s == 0, 'In phase mode, data should have sides 0,0,1,1,0,0,1,1,...'
+
+                time0.append(time[n])
+                side0.append(side[n])
+                x0.append(x[n])
+                y0.append(y[n])
+                energy0.append(energy[n])
+
+            elif n % 4 in (2, 3):
+                assert s == 1, 'In phase mode, data should have sides 0,0,1,1,0,0,1,1,...'
+
+                time1.append(time[n])
+                side1.append(side[n])
+                x1.append(x[n])
+                y1.append(y[n])
+                energy1.append(energy[n])
+
+        time = time0 + time1
+        side = side0 + side1
+        x = x0 + x1
+        y = y0 + y1
+        energy = energy0 + energy1
 
     if normalise:
         minimum = min(time)
@@ -91,7 +191,7 @@ def process_file(file_, normalise=False):
 
         time = [factor * (t - minimum) / (difference) for t in time]
 
-    return zip(time, ID, x, y, side, energy)  # Note: we have put side to the right of (x, y) rather than the left.
+    return list(zip(time, ID, x, y, side, energy))  # Note: we have put side to the right of (x, y) rather than the left.
 
 
 def group_events(events):

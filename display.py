@@ -77,10 +77,9 @@ def get_addresses(bus):
 
 
 def display_arranger(bus, displays):
-    # TODO: check.
-    # TODO: consider display.side
-
     num_sides = max([display.side for display in displays]) + 1
+
+    string = ''
 
     for side in range(num_sides):
         len_X = max([display.X for display in displays]) + 1
@@ -92,7 +91,7 @@ def display_arranger(bus, displays):
             if display.side == side:
                 array[display.Y][display.X] = display.char
 
-        string = f'Side {side} ->\n'
+        string += f'Side {side} ->\n'
 
         for rows in array:
             string += '  '
@@ -102,10 +101,10 @@ def display_arranger(bus, displays):
 
             string = string[:-1] + '\n'
 
-        print(string[:-1])
-
     for display in displays:
         display.display_string(bus, display.char, forever=True)
+
+    return string[:-1]
 
 
 def switch_displays(display_A, display_B):
@@ -113,6 +112,29 @@ def switch_displays(display_A, display_B):
     assert isinstance(display_B, Display)
 
     display_A.addr, display_B.addr = display_B.addr, display_A.addr
+
+
+def switch_displays_from_chars(displays, char1, char2):
+    assert isinstance(char1, str)
+    assert isinstance(char2, str)
+    assert len(char1) == 1
+    assert len(char2) == 1
+
+    display1 = get_display_from_char(displays, char1)
+    display2 = get_display_from_char(displays, char2)
+
+    switch_displays(display1, display2)
+
+
+def get_display_from_char(displays, char):
+    assert isinstance(char, str)
+    assert len(char) == 1
+
+    for display in displays:
+        if display.char == char:
+            return display
+
+    raise ValueError(f'No display with char {char}.')
 
 
 def clear_displays(bus, displays):

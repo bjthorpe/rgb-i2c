@@ -39,6 +39,10 @@ orientation_type = {
     'ROTATE_270': 3,
 }
 
+MODES = ['normal', 'phase']  # How should we display the data?
+
+MODE_DEFAULT = 'normal'  # What is the default way to display the data?
+
 COLORS = {
     'red': 0x00,
     'orange': 0x12,
