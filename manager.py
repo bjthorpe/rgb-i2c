@@ -23,17 +23,20 @@ def reset():
     g_break = False  # Global break statement so each thread knows when to quit.
 
 
-def initialise(layout=None, force_displays=False):
+def initialise(layout=None, bus=None, displays=None, force_displays=False):
     global g_bus
     global g_displays
 
+    if displays is not None:
+        assert bus is not None, 'Need to supply bus with displays.'
+
     reset()
 
-    g_bus = get_bus()
+    g_bus = get_bus() if bus is None else bus
 
     wait_for_matrix_ready()
 
-    g_displays = get_displays(g_bus, layout, force_displays)
+    g_displays = get_displays(g_bus, layout, force_displays) if displays is None else displays
 
     assert len(g_displays) > 0, 'No displays found.'
 
@@ -121,7 +124,7 @@ def data_manager(data):
         first_pass = False
 
 
-def run(file_=None, layout=None, mode=MODE_DEFAULT,
+def run(file_=None, layout=None, bus=None, displays=None, mode=MODE_DEFAULT,
         energy_method=ENERGY_METHOD_DEFAULT,
         force_displays=False, normalise=False):
     global g_bus
@@ -130,12 +133,15 @@ def run(file_=None, layout=None, mode=MODE_DEFAULT,
     if file_ is not None:
         assert isinstance(file_, str)
 
+    if displays is not None:
+        assert bus is not None, 'Need to supply bus with displays.'
+
     assert isinstance(force_displays, bool)
     assert isinstance(normalise, bool)
 
     time_start = time()
 
-    initialise(layout, force_displays)
+    initialise(layout, bus, displays, force_displays)
 
     data = process_data(file_, g_displays, mode=mode, energy_method=energy_method, normalise=normalise)
 

@@ -1,3 +1,6 @@
+from numpy import pi as numpy_pi
+
+
 #The device i2c address in default
 DEFAULT_I2C_ADDR = 0x65
 
@@ -74,6 +77,8 @@ ENERGY_METHOD_DEFAULT = 'accumulate'  # Should the energy of a pixel tick away o
 
 ENERGY_TICK_RATE_DEFAULT = 5.0  # Every `GRADIENT_DELAY` seconds, the energy of a pixel should decay by how much?
 
+PHASE_MODE_TICKS = 2  # How many ticks should occur for each data point if in phase mode?
+
 WAIT_WRITE = 0.001 # Time to wait for Bus after a write statement.
 WAIT_READ = 0.1 # Time to wait for Bus after a read statement
 WAIT_INITIAL = 0.1 # Time to wait for Bus on startup.
@@ -92,3 +97,6 @@ EXAMPLE_DATA = [(1.00, 999, 0, 3, 3, 18.0), (2.75, 999, 0, 3, 3, 20.0)]
 
 LETTERS = list('ABCDEFGJKLMPQRTUVWY')  # Usable letters for arranging the displays. These have no awkward symmetries.
 
+PI = float(numpy_pi)
+
+SMALL_NUMBER = 0.0000000001

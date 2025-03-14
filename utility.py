@@ -1,3 +1,4 @@
+from numpy import ceil, cos, sin, isclose
 from time import sleep
 
 from parameters import GRADIENT_DELAY, WAIT_INITIAL
@@ -37,12 +38,80 @@ def get_num_ticks(quantity, rate):
     ''' Gets the number of ticks needed to take a quantity down to 0.
         E.g if we have 18eV and a tick rate of 5eV, then it will take
         4 ticks to reduce this to 0eV. '''
-    return 1 + int(quantity // rate)
+
+    return int(ceil(quantity // rate))
+
+
+def get_rate(quantity, num_ticks):
+    ''' Get the rate that a quantity should change based on the number
+        of ticks required. E.g if we have 18eV and 2 ticks, then the
+        rate should be 9eV per tick. '''
+    return quantity / float(num_ticks)
 
 
 def get_quantity(num_ticks, rate):
     ''' Similar to above. This quantity could be, for example, the
         amount of time where the rate is the time delay. Or, the
         amount of energy where the rate is the energy decay. '''
-    return num_ticks * rate
+    return float(num_ticks) * rate
+
+
+def get_phase_bin(bins, quantity):
+    for b in bins:
+        if quantity == b:
+            return b
+
+    # If the quantity is just on the edge, put it into that bin.
+    max_bin = max(bins)
+
+    if isclose(quantity, max_bin.ubound):
+        return max_bin
+
+    min_bin = min(bins)
+
+    if isclose(min_bin.lbound, quantity):
+        return min_bin
+
+    raise ValueError(f'{quantity} does not fall into any of the bins provided.')
+
+
+class PhaseBin:
+    MATRIX_SIZE = 8  # TODO: assumes the displays are 8x8.
+
+    def __init__(self, lbound, ubound):
+        assert isinstance(lbound, (float, int))
+        assert isinstance(ubound, (float, int))
+
+        self.lbound = lbound
+        self.ubound = ubound
+        self.angle = (self.lbound + self.ubound) / 2.0
+
+        self.count = 0
+
+        self.determine_x_y(max_count=1)
+
+    def __eq__(self, other):
+        # Only implemented for floats/ints.
+        assert isinstance(other, (float, int))
+
+        return self.lbound <= other <= self.ubound
+
+    def __lt__(self, other):
+        return self.lbound < other.lbound
+
+    def __repr__(self):
+        return f'{self.lbound:15.9f} -> {self.ubound:15.9f}'
+
+    def determine_x_y(self, max_count):
+        assert isinstance(max_count, (float, int))
+        assert max_count >= self.count
+
+        norm_radius = float(self.count) / float(max_count)
+
+        self.x = int(ceil(norm_radius * self.MATRIX_SIZE * cos(self.angle)))
+        self.y = int(ceil(norm_radius * self.MATRIX_SIZE * sin(self.angle)))
+
+        # These transformations take us from the maths co-ordinate frame to the display co-ordinate frame.
+        self.x += self.MATRIX_SIZE - 1
+        self.y = self.MATRIX_SIZE - self.y
 
