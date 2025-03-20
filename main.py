@@ -19,6 +19,8 @@ switch_displays_from_chars(displays, 'B', 'E')
 switch_displays_from_chars(displays, 'B', 'C')
 switch_displays_from_chars(displays, 'E', 'G')
 
+#print(display_arranger(bus, displays));exit()
+
 run(file_=temp_file, layout=layout, \
     bus=bus, displays=displays, \
     mode='phase', \

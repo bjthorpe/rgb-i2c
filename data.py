@@ -6,7 +6,7 @@ from parameters import MODES, MODE_DEFAULT, \
                        PHASE_MODE_TICKS, \
                        COLOR_DEFAULT, COLOR_GRADIENT_DEFAULT, COLOR_METHODS, COLOR_METHOD_DEFAULT, \
                        ENERGY_METHODS, ENERGY_METHOD_DEFAULT, ENERGY_TICK_RATE_DEFAULT, \
-                       EVENT_TIME_DIFFERENCE_TOLERANCE, GRADIENT_DELAY, EXAMPLE_DATA, \
+                       EVENT_TIME_DIFFERENCE_TOLERANCE, GRADIENT_DELAY, GRADIENT_DELAY_PHASE, EXAMPLE_DATA, \
                        PI
 from utility import get_color_from_gradient, get_num_ticks, get_quantity, get_rate, PhaseBin, get_phase_bin
 
@@ -92,7 +92,7 @@ def process_data(file_,
         if energy_method == 'accumulate':
             data_processed = get_energy_accum_data(data_raw)
         elif energy_method == 'tick':
-            data_processed = get_energy_tick_data(data_raw, phase_mode=mode=='phase')
+            data_processed = get_energy_tick_data(data_raw, gradient_delay=GRADIENT_DELAY_PHASE, phase_mode=mode=='phase')
 
 
     # Before creating the events, we need to tie in some phase data first.
@@ -102,14 +102,13 @@ def process_data(file_,
         # An exact arc will cut through 15 of the pixels on an 8x8 display. So we create 60 bins (one for each quadrant).
 
         phase_bins = []
-        num_bins = 30
+        num_bins = 60
 
         for n in range(num_bins):
-            lbound = PI * float(n) / float(num_bins)
-            ubound = PI * float(n+1) / float(num_bins)
+            lbound = 2.0 * PI * (float(n)) / float(num_bins)
+            ubound = 2.0 * PI * (float(n+1)) / float(num_bins)
 
-            phase_bins.append(PhaseBin(lbound, ubound))  # Top half of diagram.
-            phase_bins.append(PhaseBin(-ubound, -lbound))  # Bottom half of diagram.
+            phase_bins.append(PhaseBin(lbound, ubound))
 
         # This will store the 'data points' of pixel changes for the phase side.
         data_phase_processed = []
@@ -129,10 +128,19 @@ def process_data(file_,
             phaseAB = float(arctan2(A[1]-B[1], A[0]-B[0], dtype=float))
             phaseCD = float(arctan2(C[1]-D[1], C[0]-D[0], dtype=float))
 
-            # Ensures angle is between -PI and PI.
-            phase_diff = (phaseAB - phaseCD) % (2.0 * PI)
-            if (phase_diff > PI):
-                phase_diff = 2.0 * PI - phase_diff
+            # Get phase difference.
+            phase_diff = phaseAB - phaseCD
+
+            # Ensure angle is between 0 and 2PI.
+            if phase_diff < 0.0:
+                phase_diff += 2.0 * PI
+
+            #### Ensures angle is between -PI and PI.
+            ###if phase_diff > PI:
+            ###    phase_diff -= 2.0 * PI
+
+            ###if phase_diff <= -PI:
+            ###    phase_diff += 2.0 * PI
 
             phase_bin = get_phase_bin(phase_bins, phase_diff)
 
@@ -169,11 +177,13 @@ def process_data(file_,
 
                 # Only turn the new pixel on, if the number of counts it had before was 0.
                 if frame_counts_old[on_y][on_x] == 0:
-                    data_phase_processed.append(DataPoint(on_x, on_y, side=0, energy=inf, start_time=data_processed[n].start_time))
+                    data_phase_processed.append(DataPoint(on_x, on_y, side=0, energy=inf,
+                                                          start_time=data_processed[n].start_time, gradient_delay=GRADIENT_DELAY_PHASE))
 
                 # Only turn the old pixel off, if the number of counts it has now is 0.
                 if frame_counts[off_y][off_x] == 0:
-                    data_phase_processed.append(DataPoint(off_x, off_y, side=0, energy=-inf, start_time=data_processed[n].start_time))
+                    data_phase_processed.append(DataPoint(off_x, off_y, side=0, energy=-inf,
+                                                          start_time=data_processed[n].start_time, gradient_delay=GRADIENT_DELAY_PHASE))
 
 
     if color_method == 'energy':  # Base the colouring on the energy of the detection.

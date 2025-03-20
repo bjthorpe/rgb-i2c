@@ -90,6 +90,7 @@ DEVICE_NUM_MAX = 119 # Maximum device number sensible as in `i2cdetect -y 1`
 FRAME_RATE = 1.0 / 30.0 # How often is the frame manager updated?
 
 GRADIENT_DELAY = 0.5  # How long is the default between colour changes of pixels?
+GRADIENT_DELAY_PHASE = GRADIENT_DELAY / 5.0  # How long is the time between data changes in phase mode?
 
 EVENT_TIME_DIFFERENCE_TOLERANCE = 0.001  # If two pixel light-ups are within this time frame, then they are updated at the same time.
 

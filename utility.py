@@ -1,7 +1,7 @@
 from numpy import ceil, cos, sin, isclose
 from time import sleep
 
-from parameters import GRADIENT_DELAY, WAIT_INITIAL
+from parameters import GRADIENT_DELAY, WAIT_INITIAL, PI
 
 
 def wait_for_matrix_ready():
@@ -61,16 +61,26 @@ def get_phase_bin(bins, quantity):
         if quantity == b:
             return b
 
+    # If we don't find a bin, try adding a bit of noise to ensure it is not due to numerical error.
+    quantity -= 1.0E-9
+
+    if quantity < 0.0:
+        quantity += 2.0 * PI
+
+    for b in bins:
+        if quantity == b:
+            return b
+
     # If the quantity is just on the edge, put it into that bin.
-    max_bin = max(bins)
+    ###max_bin = max(bins)
 
-    if isclose(quantity, max_bin.ubound):
-        return max_bin
+    ###if isclose(quantity, max_bin.ubound):
+    ###    return max_bin
 
-    min_bin = min(bins)
+    ###min_bin = min(bins)
 
-    if isclose(min_bin.lbound, quantity):
-        return min_bin
+    ###if isclose(min_bin.lbound, quantity):
+    ###    return min_bin
 
     raise ValueError(f'{quantity} does not fall into any of the bins provided.')
 
@@ -94,7 +104,7 @@ class PhaseBin:
         # Only implemented for floats/ints.
         assert isinstance(other, (float, int))
 
-        return self.lbound <= other <= self.ubound
+        return self.lbound < other <= self.ubound
 
     def __lt__(self, other):
         return self.lbound < other.lbound
