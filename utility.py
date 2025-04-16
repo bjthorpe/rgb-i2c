@@ -39,7 +39,7 @@ def get_num_ticks(quantity, rate):
         E.g if we have 18eV and a tick rate of 5eV, then it will take
         4 ticks to reduce this to 0eV. '''
 
-    return int(ceil(quantity // rate))
+    return int(ceil(quantity / rate))
 
 
 def get_rate(quantity, num_ticks):
