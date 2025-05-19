@@ -74,7 +74,7 @@ def process_data(file_,
         assert (0, 0) in displays_dict[1]
         assert (0, 1) in displays_dict[1]
         assert (1, 0) in displays_dict[1]
-        #assert (1, 1) in displays_dict[1]  # FIXME: ADD THIS BACK IN.
+        assert (1, 1) in displays_dict[1]
 
         # The process_file function has already ordered the data for us.
         # The first half of the data is for help with the phase diagram.
@@ -421,29 +421,29 @@ def get_energy_tick_data(data_raw, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gr
 
         # We need to make sure that any hits on pixels that are already lit up do not overwrite, but instead add, energy to the pixel.
         for n, dA in enumerate(data_processed):  # d for data point.
-    
+
             # Only bother look at data points ahead of the currently considered one.
             for dB in data_processed[n+1:]:
-    
+
                 # We're looking for data points that hit the same pixel and iB starts before the end of iA.
                 if (dA.x == dB.x) and (dA.y == dB.y) and (dB.start_time < dA.end_time):
-    
+
                     # An event, dB, occurs within the time frame that dA is still alight.
-    
+
                     # Therefore, we erase the ticks of the initial iA event that would occur after iB has started.
                     # This includes remove the final background colour tick of iA, which iB will now deal with.
                     dA.ticks -= get_num_ticks(dA.end_time-dB.start_time, gradient_delay)
-    
+
                     # The initial iA event end time is now equal to the latter iB event start time.
                     dA.end_time = dB.start_time
-    
+
                     # The energy of the latter iB event will be itself plus |the energy of the initial iA event minus the amount it has decayed by|.
                     dB.energy += dA.energy - dA.ticks * energy_tick_rate
-    
+
                     # Now re-compute the (greater) number of ticks and the (later) end time for the latter iB event.
                     dB.ticks = get_num_ticks(dB.energy, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
                     dB.end_time = dB.start_time + get_quantity(dB.ticks, gradient_delay)  # Start time + alight time.
-    
+
                     # If dA overlaps with a dC, this will be dealt with by dB, so may as well break here to save time.
                     break
 
@@ -490,7 +490,6 @@ def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_
 
             color = COLOR_DEFAULT if energy <= 0.0 else get_color_from_gradient(energy, color_gradient)
 
-            if data_point.side==1 and data_point.x > 7 and data_point.y > 7: continue # FIXME: !!! REMOVE THIS !!!
             display_ID = get_display_ID(displays, data_point.x, data_point.y, data_point.side)
 
             x = data_point.x % displays[display_ID].size  # Turns global x into local.
