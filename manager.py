@@ -126,7 +126,7 @@ def data_manager(data):
 
 def run(file_=None, layout=None, bus=None, displays=None, mode=MODE_DEFAULT,
         energy_method=ENERGY_METHOD_DEFAULT,
-        force_displays=False, normalise=False):
+        force_displays=False, normalise=True):
     global g_bus
     global g_displays
 
