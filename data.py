@@ -19,7 +19,7 @@ def process_data(file_,
                  energy_tick_rate=ENERGY_TICK_RATE_DEFAULT,
                  gradient_delay=GRADIENT_DELAY,
                  color_gradient=COLOR_GRADIENT_DEFAULT,
-                 normalise=False):
+                 normalise=True):
 
     assert isinstance(file_, str)
     assert all(isinstance(display, Display) for display in displays)
@@ -214,7 +214,7 @@ def process_file(file_, mode=MODE_DEFAULT, normalise=False):
     assert isinstance(mode, str)
     assert isinstance(normalise, bool)  # Do we want to normalise the time data to have on avg. 100 data points per 5 sec?
 
-    data = loadtxt(file_)
+    data = loadtxt(file_, delimiter=',')
 
     assert len(data.shape) == 2, 'Need more than 1 data point.'  # Dealing with numpy's awkward shape size.
     assert data.shape[0] > 0, f'No data in file {file_}.'
@@ -236,7 +236,9 @@ def process_file(file_, mode=MODE_DEFAULT, normalise=False):
     assert all(s in (0, 1) for s in side), 'Data point with side not equal to 0 or 1.'  # TODO: relax this condition?
     assert all(x_i >= 0 for x_i in x), 'Data point with x pixel < 0.'
     assert all(y_i >= 0 for y_i in y), 'Data point with y pixel < 0.'
-    assert all(e >= 0.0 for e in energy), 'Data point with energy < 0.'
+    #assert all(e >= 0.0 for e in energy), 'Data point with energy < 0.'  # TODO: include?
+
+    energy = [1.0 for e in energy]  # TODO: add mode for this.
 
     if mode == 'phase':
         assert all(s in (0, 1) for s in side), 'Need only side 0 and 1 for phase mode.'
@@ -285,7 +287,7 @@ def process_file(file_, mode=MODE_DEFAULT, normalise=False):
         minimum = min(time)
         difference = max(time) - minimum
         num_data_points = data.shape[0]
-        factor = 5.0 * float(num_data_points) / 100.0
+        factor = 5.0 * float(num_data_points) / 5000.0
 
         time = [factor * (t - minimum) / (difference) for t in time]
 
