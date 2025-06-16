@@ -1,6 +1,6 @@
 from copy import deepcopy
-from numpy import loadtxt, arctan2, inf, where, zeros
-
+from numpy import  arctan2, inf, where, zeros
+import pandas as pd
 from display import Display, get_display_ID
 from parameters import MODES, MODE_DEFAULT, \
                        PHASE_MODE_TICKS, \
@@ -80,8 +80,12 @@ def process_data(file_,
         # The first half of the data is for help with the phase diagram.
         # The second half of the data is to be display on side 1 as it would in 'normal' mode.
 
-        data_phase = data_raw[:len(data_raw)//2]
-        data_raw = data_raw[len(data_raw)//2:]
+	# BT: with pandas you can split filter the datframe based on a condion that may be more useful 
+	# than creating a lsit and spliting it in two.
+     
+        data_phase = data_raw.loc[data_raw['side']==0]
+        data_raw = data_raw.loc[data_raw['side']==1]               
+    
 
         # Let's go and process the data_raw as normal, and then tie in the phase data after.
 
@@ -90,7 +94,11 @@ def process_data(file_,
 
         # Collect the list of DataPoints, accounting for the energy method.
         if energy_method == 'accumulate':
-            data_processed = get_energy_accum_data(data_raw)
+            data_raw = get_energy_accum_data(data_raw)
+            data_processed = []
+            # BT: Applying the function to convert pandas dataframe to datapoint class row-wise
+            data_processed = data_raw.apply(dframe_to_dpclass,starttime=data_raw['time'].min(), endtime=data_raw['time'].max(),axis=1)
+
         elif energy_method == 'tick':
             data_processed = get_energy_tick_data(data_raw, gradient_delay=GRADIENT_DELAY_PHASE, phase_mode=mode=='phase')
 
@@ -214,35 +222,33 @@ def process_file(file_, mode=MODE_DEFAULT, normalise=False):
     assert isinstance(mode, str)
     assert isinstance(normalise, bool)  # Do we want to normalise the time data to have on avg. 100 data points per 5 sec?
 
-    data = loadtxt(file_, delimiter=',')
+    # create pandas dataframe from csv file containing all the data points
+    data = pd.read_csv(file_, sep=',')
 
     assert len(data.shape) == 2, 'Need more than 1 data point.'  # Dealing with numpy's awkward shape size.
     assert data.shape[0] > 0, f'No data in file {file_}.'
     assert data.shape[1] == 6, 'Number of columns of data should be 6.'
 
+
     if mode == 'phase':
         assert data.shape[0] % 4 == 0, 'Phase mode requires 4 pieces of data for each event.'
 
-    time, ID, side, x, y, energy = zip(*data)
+   # BT:  give the datframe columns some sensible lables 
+    data.columns = ['time', 'ID', 'side', 'x', 'y', 'energy']
+    
+  # BT: all these assresions now take one operastion rather than several loops  
+    assert data['time'].min() >= 0.0, 'Data point with time < 0.'
+    assert data['side'].isin([0,1]).all(), 'Data point with side not equal to 0 or 1.'  # TODO: relax this condition?
+    assert data['x'].min() >= 0.0, 'Data point with x pixel < 0.'
+    assert data['y'].min() >= 0.0, 'Data point with y pixel < 0.'
+    assert data['energy'].min() >= 0.0, 'Data point with energy < 0.'# TODO: include? BT: sure can't hurt to sanity check
+      
 
-    time = list(map(float, time))
-    ID = list(map(int, ID))
-    side = list(map(int, side))
-    x = list(map(int, x))
-    y = list(map(int, y))
-    energy = list(map(float, energy))
-
-    assert all(t >= 0.0 for t in time), 'Data point with time < 0.'
-    assert all(s in (0, 1) for s in side), 'Data point with side not equal to 0 or 1.'  # TODO: relax this condition?
-    assert all(x_i >= 0 for x_i in x), 'Data point with x pixel < 0.'
-    assert all(y_i >= 0 for y_i in y), 'Data point with y pixel < 0.'
-    #assert all(e >= 0.0 for e in energy), 'Data point with energy < 0.'  # TODO: include?
-
-    energy = [1.0 for e in energy]  # TODO: add mode for this.
+    #energy = [1.0 for e in energy]  # TODO: add mode for this.
 
     if mode == 'phase':
-        assert all(s in (0, 1) for s in side), 'Need only side 0 and 1 for phase mode.'
-
+	# BT: not sure if we need this here or futher up? we certainly dont need both
+        assert data['side'].isin([0,1]).all(), 'Data point with side not equal to 0 or 1.'
         # Side 0 will show a diagram of phase data.
         # Side 1 will show its data just as in mode=='normal'
         # DataPoint 1: Absorption/scatter on detector 0 with x,y,energy.
@@ -252,46 +258,15 @@ def process_file(file_, mode=MODE_DEFAULT, normalise=False):
         # We split up this data into two sets - that to be displayed normally and the corresponding data to create the phase diagram.
         # The phase data comes first and then the data to display normally.
 
-        time0, time1 = [], []
-        side0, side1 = [], []
-        x0, x1 = [], []
-        y0, y1 = [], []
-        energy0, energy1 = [], []
-
-        for n, s in enumerate(side):
-            if n % 4 in (0, 1):
-                assert s == 0, 'In phase mode, data should have sides 0,0,1,1,0,0,1,1,...'
-
-                time0.append(time[n])
-                side0.append(side[n])
-                x0.append(x[n])
-                y0.append(y[n])
-                energy0.append(energy[n])
-
-            elif n % 4 in (2, 3):
-                assert s == 1, 'In phase mode, data should have sides 0,0,1,1,0,0,1,1,...'
-
-                time1.append(time[n])
-                side1.append(side[n])
-                x1.append(x[n])
-                y1.append(y[n])
-                energy1.append(energy[n])
-
-        time = time0 + time1
-        side = side0 + side1
-        x = x0 + x1
-        y = y0 + y1
-        energy = energy0 + energy1
+        # I belive this line does the trick, basically sort all the values by both side and time
+        data = data.sort_values(['side','time'])
 
     if normalise:
-        minimum = min(time)
-        difference = max(time) - minimum
         num_data_points = data.shape[0]
         factor = 5.0 * float(num_data_points) / 5000.0
+        data['time'] = factor * (data['time'] - data['time'].min())/(data['time'].max() - data['time'].min())
 
-        time = [factor * (t - minimum) / (difference) for t in time]
-
-    return list(zip(time, ID, x, y, side, energy))  # Note: we have put side to the right of (x, y) rather than the left.
+    return data
 
 
 def group_events(events):
@@ -340,32 +315,14 @@ def get_energy_accum_data(data_raw):
         gets the data points with their own energy. It then ensures the data is sorted
         and the energies of the pixels updated to be accumulative. '''
 
-    data_processed = []
 
-    for t, ID, x, y, s, e in data_raw:  # time, crystal_ID, x, y, side, energy.
-        data_processed.append(DataPoint(x, y, s, e, start_time=t))
-
-    data_processed = sorted(data_processed)  # Sorted based on start_time.
+    data_processed = data_raw.sort_values('time') # Sorted based on start_time. BT: probably not necessary
 
     # We need to make the energy of the data point equal to itself plus the previous energy of the pixel.
     # If there are no hits of the pixel before data point, then its energy is left unchanged.
-    for n, dA in enumerate(data_processed):  # d for data point.
-
-        # We ignore the first data point as this will never need its energy updated.
-        if n == 0:
-            continue
-
-        # Only bother look at data points before the currently considered one **in reverse**.
-        for dB in data_processed[n-1::-1]:
-
-            # We're looking for data points that hit the same pixel.
-            if (dA.x == dB.x) and (dA.y == dB.y):
-
-                # Both data points hit the same pixel. The energy of dA should be itself plus dB.
-                dA.energy += dB.energy
-
-                # Don't want to add any energies, as we would be double counting.
-                break
+    #
+    # BT: This should do the trick
+    data_processed['energy']=data_processed.groupby(['x','y'])['energy'].cumsum()
 
     return data_processed
 
@@ -501,6 +458,9 @@ def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_
 
     return events
 
+def dframe_to_dpclass(data,starttime,endtime):
+    ' function to take in a pandas datframe and construct a list of datapoints for each row'
+    return DataPoint(x=int(data['x']),y=int(data['y']),side=int(data['side']),energy=float(data['energy']),start_time=starttime,end_time=endtime)
 
 class DataPoint:
     def __init__(self, x, y, side=0, energy=0.0, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT,
