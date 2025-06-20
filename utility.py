@@ -25,13 +25,18 @@ def get_color_from_gradient(quantity, color_gradient):
     assert isinstance(quantity, (float, int))
 
     bounds, colors = color_gradient
-
+    max_c = 220
+    # step = bounds[0]-bounds[1]
     # Loop through the bounds from smallest to largest.
     for upper_bound, color in zip(bounds[::-1], colors[::-1]):
         if quantity <= upper_bound:
-            return color
-    else:
-        return colors[0]  # If we the quantity doesn't fit anywhere, assume it is the highest quantity colour.
+            #print(quantity)
+            #print(253*quantity/bounds[0])
+            
+            return int(220*quantity/bounds[0]) # - color
+        else:
+        #print(quantity)
+            return max_c #colors[0]  # If we the quantity doesn't fit anywhere, assume it is the highest quantity colour.
 
 
 def get_num_ticks(quantity, rate):

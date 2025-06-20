@@ -42,7 +42,7 @@ orientation_type = {
     'ROTATE_270': 3,
 }
 
-MODES = ['normal', 'phase']  # How should we display the data?
+MODES = ['normal', 'phase', 'scatter']  # How should we display the data?
 
 MODE_DEFAULT = 'normal'  # What is the default way to display the data?
 
@@ -89,10 +89,12 @@ DEVICE_NUM_MAX = 119 # Maximum device number sensible as in `i2cdetect -y 1`
 
 FRAME_RATE = 1.0 / 30.0 # How often is the frame manager updated?
 
-GRADIENT_DELAY = 0.5  # How long is the default between colour changes of pixels?
+#GRADIENT_DELAY = 0.5  # How long is the default between colour changes of pixels?
+GRADIENT_DELAY = 1  # How long is the default between colour changes of pixels?
 GRADIENT_DELAY_PHASE = GRADIENT_DELAY / 5.0  # How long is the time between data changes in phase mode?
 
-EVENT_TIME_DIFFERENCE_TOLERANCE = 0.001  # If two pixel light-ups are within this time frame, then they are updated at the same time.
+#EVENT_TIME_DIFFERENCE_TOLERANCE = 0.001  # If two pixel light-ups are within this time frame, then they are updated at the same time.
+EVENT_TIME_DIFFERENCE_TOLERANCE = 1.0  # If two pixel light-ups are within this time frame, then they are updated at the same time.
 
 EXAMPLE_DATA = [(1.00, 999, 0, 3, 3, 18.0), (2.75, 999, 0, 3, 3, 20.0)]
 
