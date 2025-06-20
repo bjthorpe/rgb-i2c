@@ -647,9 +647,8 @@ def get_energy_accum_events(data_points, displays, color_gradient=COLOR_GRADIENT
         given the energy_method is accumulate. This is just one event per data point. '''
 
     events = []
-
     for data_point in data_points:
-        color = COLOR_DEFAULT if data_point.energy <= 0.0 else get_color_from_gradient(data_point.energy, color_gradient)
+        color = COLOR_DEFAULT if data_point.energy <= 0.0 else get_color_from_gradient(data_point.energy, color_gradient,len(data_points))
 
         display_ID = get_display_ID(displays, data_point.x, data_point.y, data_point.side)
 
@@ -674,6 +673,7 @@ def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_
         `gradient_delay` seconds later, 0 eV (blank) colour `gradient_delay` seconds later. '''
 
     events = []
+    print("Total points ",len(data_points))
     d = 0
     for data_point in data_points:
         #if(d%4==0):
@@ -683,7 +683,7 @@ def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_
             #print("Tick ",tick)
             energy = data_point.energy - tick * data_point.energy_tick_rate
 
-            color = COLOR_DEFAULT if energy <= 0.0 else get_color_from_gradient(energy, color_gradient)
+            color = COLOR_DEFAULT if energy <= 0.0 else get_color_from_gradient(energy, color_gradient,len(data_points))
             #print("Colour is ",color)
 
             display_ID, mirror_ID = get_display_ID(displays, data_point.x, data_point.y, data_point.side)
