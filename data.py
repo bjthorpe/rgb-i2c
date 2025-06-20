@@ -362,17 +362,37 @@ def process_data(file_,
     # Let's group multiple pixel updates together into a single event, IF they are very close together in time.
     events = group_events(events)
 
-    print(" ")
-    numEvent = 0
-    for event in events:
-        numEvent += 1
-        print("Grouped Event ",numEvent)
-        print("x_values    ",event.x_values)
-        print("y_values    ",event.y_values)
-        print("colors      ",event.colors)
-        print("display_IDs ",event.display_IDs)
-        print("start_time  ",event.start_time)
+    # Let's construct the pixel map for one display
+    rows, cols = (8, 8)
+
+    for ID in range(4):
+        # Create and initialise to zero
+        pixelmap = [[0 for i in range(cols)] for j in range(rows)]
+
+        for event in events:
+            #print("Display IDs",event.display_IDs)
+            #print("x",event.x_values)
+            #print("y",event.y_values)
+            for plot in range(len(event.x_values)):
+                if (event.display_IDs[plot]==ID):
+                    pixelmap[event.x_values[plot]][event.y_values[plot]]+=1
+
         print(" ")
+        print("Pixel map for display ",ID)
+        for j in range(rows):
+            print(pixelmap[j])
+
+            #print(" ")
+    #numEvent = 0
+    #for event in events:
+    #    numEvent += 1
+    #    print("Grouped Event ",numEvent)
+    #    print("x_values    ",event.x_values)
+    #    print("y_values    ",event.y_values)
+    #    print("colors      ",event.colors)
+    #    print("display_IDs ",event.display_IDs)
+    #    print("start_time  ",event.start_time)
+    #    print(" ")
 
     return events
 
