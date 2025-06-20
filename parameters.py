@@ -62,8 +62,12 @@ COLORS = {
 COLOR_DEFAULT = COLORS.get('black')
 
 # The default colour gradient pattern is based on the energies.
-COLOR_GRADIENT_DEFAULT = ([50.0, 42.5, 35.0, 27.5, 20.0, 12.5, 5.0],  # Anything up to this energy value...
-                          [ 254,  125,  135,  145,  155,  165, 175])  # ... will have the following colour.
+# These are used as percentages of total hits on one detector. On gated data, we expect
+# incident photon on one of the middle four, so 25% of hits should be max color
+COLOR_GRADIENT_DEFAULT = ([20.0, 4.0, 3.0, 2.0, 1.0],  # Anything up to this energy value...
+                          [ 18,  24,  82,  127, 170])  # ... will have the following colour.
+#COLOR_GRADIENT_DEFAULT = ([50.0, 42.5, 35.0, 27.5, 20.0, 12.5, 5.0],  # Anything up to this energy value...
+#                          [ 254,  125,  135,  145,  155,  165, 175])  # ... will have the following colour.
 
 # Was mainly used for testing.
 COLOR_GRADIENT_OTHER = ([25.0, 20.0, 15.0, 10.0,  5.0],  # Anything up to this energy value...
