@@ -3,7 +3,7 @@ from threading import Thread
 from time import sleep, time
 
 from data import Event, process_data
-from display import clear_displays, get_displays
+from display import clear_displays, get_displays, activate_channel
 from parameters import FRAME_RATE, EVENT_TIME_DIFFERENCE_TOLERANCE, WAIT_DISPLAY, \
                        MODE_DEFAULT, ENERGY_METHOD_DEFAULT, WAIT_WRITE
 from utility import wait_for_matrix_ready
@@ -17,10 +17,12 @@ def reset():
     global g_bus
     global g_displays
     global g_break
+    global g_current_channel
 
     g_bus = None  # The SMBus.
     g_displays = [] # List of displays.
     g_break = False  # Global break statement so each thread knows when to quit.
+    g_current_channel = None  # What channel of the multiplexer are we currently on?
 
 
 def initialise(layout=None, bus=None, displays=None, force_displays=False, mirror=False):
@@ -48,11 +50,17 @@ def display_manager():
     global g_bus
     global g_displays
     global g_break
+    global g_current_channel
 
     while True:
         for display in g_displays:
             if display.needs_updating:
-                display.display_current_frame(g_bus, forever=True)  # forever=True as timing is handled by the data manager.
+
+                if (g_current_channel is None) or (g_current_channel != display.channel):
+                    activate_channel(g_bus, display.channel)
+                    g_current_channel = display.channel
+
+                display.display_current_frame(g_bus, forever=True, update_channel=False)  # forever=True as timing is handled by the data manager. update_channel=False as is handled by display_manager (just above).
 
                 display.needs_updating = False
 
@@ -150,41 +158,23 @@ def run(file_=None, layout=None, bus=None, displays=None, mode=MODE_DEFAULT,
     initialise(layout, bus, displays, force_displays, mirror)
 
     data = process_data(file_, g_displays, mode=mode, energy_method=energy_method, normalise=normalise, mirror=mirror)
-    #min_e = 125
-    #max_e = 254
-    #bins = [125,132,141,150,159,167,175,254,255]
-    #cols = [125,114,117,68,32,-3,-20,34]
-    #for j in range(len(data)):
-    #    for k in range(len(data[j].colors)):
-    #        #if c < min_e:
-    #        #    min_e = c
-            #if c > max_e:
-            #    max_e = c
-    #        for i in range(len(bins)-1):
-    #            if data[j].colors[k] >= bins[i] and data[j].colors[k] < bins[i+1]:
-    #                data[j].colors[k] -= cols[i]
-    #print(count)
-    #print(data[0].display_IDs)
-    #print(data[0].colors)
-    #print(f"minimum colour {min_e}")
-    #print(f"maximum colour {max_e}")
-    #input()
+
     thread_display = Thread(target=display_manager, name='Display')
     thread_data = Thread(target=data_manager, args=(data,), name='Data')
 
     time_middle = time()
-
+    
     thread_display.start()
     thread_data.start()
-
+    
     thread_display.join()
     thread_data.join()
-
+    
     time_end = time()
-
+    
     print('Initialisation time', time_middle-time_start)
     print('Run time', time_end-time_middle)
-
+    
     clear_displays(g_bus, g_displays)
 
     reset()

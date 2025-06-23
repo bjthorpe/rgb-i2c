@@ -35,6 +35,10 @@ I2C_CMD_DISP_OFFSET = 0xb5 # This command setting the display offset
 I2C_CMD_SET_ADDR = 0xc0 # This command sets device i2c address
 I2C_CMD_RST_ADDR = 0xc1 # This command resets device i2c address
 
+I2C_MULTIPLEXER_ID = 0x70 # This is the device address of the multiplexer.
+
+I2C_MULTIPLEXER_CHANNEL_IDs = [0x1, 0x2, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80]
+
 orientation_type = {
     'ROTATE_0': 0,
     'ROTATE_90': 1,
@@ -89,7 +93,10 @@ WAIT_INITIAL = 0.1 # Time to wait for Bus on startup.
 WAIT_DISPLAY = 0.0001 # How long should the display thread wait before checking if any updates to the displays are needed?
 
 DEVICE_NUM_MIN = 8 # Minimum device number sensible as in `i2cdetect -y 1`.
-DEVICE_NUM_MAX = 119 # Maximum device number sensible as in `i2cdetect -y 1`
+DEVICE_NUM_MAX = 110 # Maximum device number sensible as in `i2cdetect -y 1`
+
+CHANNEL_NUM_MIN = min(I2C_MULTIPLEXER_CHANNEL_IDs)
+CHANNEL_NUM_MAX = max(I2C_MULTIPLEXER_CHANNEL_IDs)
 
 FRAME_RATE = 1.0 / 30.0 # How often is the frame manager updated?
 
