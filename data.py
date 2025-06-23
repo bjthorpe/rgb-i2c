@@ -555,7 +555,7 @@ def get_energy_accum_data(data_raw):
         for dB in data_processed[n-1::-1]:
 
             # We're looking for data points that hit the same pixel.
-            if (dA.x == dB.x) and (dA.y == dB.y):
+            if (dA.side == dB.side) and (dA.x == dB.x) and (dA.y == dB.y):
 
                 # Both data points hit the same pixel. The energy of dA should be itself plus dB.
                 dA.energy += dB.energy
@@ -637,7 +637,7 @@ def get_energy_tick_data(data_raw, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gr
                     break
                 
                 # We're looking for data points that hit the same pixel and iB starts before the end of iA.
-                if (dA.x == dB.x) and (dA.y == dB.y):
+                if (dA.side == dB.side) and (dA.x == dB.x) and (dA.y == dB.y):
 
                     # An event, dB, occurs within the time frame that dA is still alight.
 
