@@ -335,16 +335,13 @@ def get_energy_tick_data(data_raw, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gr
         If in phase_mode, the energy tick rate required is set to enforce a constant
         number of ticks regardless the energy of the data point. '''
 
-    data_processed = []
+    data_raw['energy_tick_rate'] = get_rate(data_raw['energy'], num_ticks=PHASE_MODE_TICKS) if phase_mode else energy_tick_rate  # Number of ticks held constant if in phase_mode.
+    data_raw['num_ticks'] = get_num_ticks(data_raw['energy'], energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
+    data_raw['alight_time'] = get_quantity(data_raw['num_ticks'], gradient_delay)  # How long should this pixel be lit up for?
 
-    for t, ID, x, y, s, e in data_raw:  # time, crystal_ID, x, y, side, energy.
-        energy_tick_rate = get_rate(e, num_ticks=PHASE_MODE_TICKS) if phase_mode else energy_tick_rate  # Number of ticks held constant if in phase_mode.
-        num_ticks = get_num_ticks(e, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
-        alight_time = get_quantity(num_ticks, gradient_delay)  # How long should this pixel be lit up for?
-
-        data_processed.append(DataPoint(x, y, s, e, energy_tick_rate, num_ticks, start_time=t, end_time=t+alight_time))
-
-    data_processed = sorted(data_processed)  # Sorted based on start_time.
+# initalise values for start and end times
+    start_time = data_raw['time'].tolist()
+    end_time = (data_raw['time'] + data_raw['alight_time']).tolist()
 
     if phase_mode:
 
@@ -360,53 +357,65 @@ def get_energy_tick_data(data_raw, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gr
         # F should have start time of E.
         # Etc...
 
-        assert len(data_processed) % 2 == 0
+        assert len(start_time) % 2 == 0        
 
-        for n in range(0, len(data_processed), 2):
+        for n in range(0, len(start_time), 2):
 
             # Don't need to update the start time of the initial data.
             if n != 0:
-                time_diff = data_processed[n].start_time - data_processed[n-2].end_time
+                
+                time_diff = start_time[n] - end_time[n-2]
+                start_time[n] -= time_diff
+                end_time[n] -= time_diff  # We do end times too for completeness.
 
-                data_processed[n].start_time -= time_diff
-                data_processed[n].end_time -= time_diff  # We do end times too for completeness.
+            time_diff = start_time[n+1] - start_time[n]
 
-            time_diff = data_processed[n+1].start_time - data_processed[n].start_time
+            start_time[n+1] -= time_diff
+            end_time[n+1] -= time_diff  # We do end times too for completeness.
+        # add processed start/end times to dataframe
+        data_raw['start_time'] = start_time
+        data_raw['end_time'] = end_time
 
-            data_processed[n+1].start_time -= time_diff
-            data_processed[n+1].end_time -= time_diff  # We do end times too for completeness.
+        
 
     else:
 
         # We need to make sure that any hits on pixels that are already lit up do not overwrite, but instead add, energy to the pixel.
-        for n, dA in enumerate(data_processed):  # d for data point.
+        for nA, t in enumerate(end_time):  # Loop over each datapoint.
+            # get X and Y and end_time for the current data point
+            curr_x = data_raw['x'][nA]
+            curr_y = data_raw['y'][nA]
+            # this list contains the index of all the data points that occur on the same pixel as the current datapoint 
+            # and overlap in time.
 
-            # Only bother look at data points ahead of the currently considered one.
-            for dB in data_processed[n+1:]:
-
-                # We're looking for data points that hit the same pixel and iB starts before the end of iA.
-                if (dA.x == dB.x) and (dA.y == dB.y) and (dB.start_time < dA.end_time):
+            for nB, row_i in enumerate(data_raw.iterrows()):
+                # Only bother look at data points ahead of the currently considered one.
+                if nB >= nA:
+                    continue
+                if (row_i['x'] == curr_x) & (row_i['y'] == curr_y) & (row_i['start_time'] < t):
 
                     # An event, dB, occurs within the time frame that dA is still alight.
 
                     # Therefore, we erase the ticks of the initial iA event that would occur after iB has started.
                     # This includes remove the final background colour tick of iA, which iB will now deal with.
-                    dA.ticks -= get_num_ticks(dA.end_time-dB.start_time, gradient_delay)
+                    data_raw['num_ticks'].iat[nA] -= get_num_ticks(data_raw['end_time'].iat[nA]-data_raw['start_time'].iat[nB], gradient_delay)
 
                     # The initial iA event end time is now equal to the latter iB event start time.
-                    dA.end_time = dB.start_time
+                    data_raw['end_time'].iat[nA] = data_raw['start_time'].iat[nB]
 
                     # The energy of the latter iB event will be itself plus |the energy of the initial iA event minus the amount it has decayed by|.
-                    dB.energy += dA.energy - dA.ticks * energy_tick_rate
+                    data_raw['energy'].iat[nB] += data_raw['energy'].iat[nA] - data_raw['num_ticks'].iat[nA] * energy_tick_rate
 
                     # Now re-compute the (greater) number of ticks and the (later) end time for the latter iB event.
-                    dB.ticks = get_num_ticks(dB.energy, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
-                    dB.end_time = dB.start_time + get_quantity(dB.ticks, gradient_delay)  # Start time + alight time.
+                    data_raw['num_ticks'].iat[nB] = get_num_ticks(data_raw['energy'].iat[nB], energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
+                    data_raw['end_time'].iat[nB] = data_raw['start_time'].iat[nB] + get_quantity(data_raw['num_ticks'].iat[nB], gradient_delay)  # Start time + alight time.
 
-                    # If dA overlaps with a dC, this will be dealt with by dB, so may as well break here to save time.
+                    # # If dA overlaps with a dC, this will be dealt with by dB, so may as well break here to save time.
                     break
-
-    return data_processed
+                else:
+                    continue
+                
+    return data_raw
 
 
 def get_energy_accum_events(data_points, displays, color_gradient=COLOR_GRADIENT_DEFAULT):
