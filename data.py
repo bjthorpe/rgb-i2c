@@ -666,7 +666,6 @@ def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_
 def storeData(data, _file='example'):
     ''' Function to store preprocessed event data in a file for displaying later'''
     import pickle
-
     print(f"Dumping processed data to file: {_file}" )
     # Dump data to file
     dbfile = open(_file, 'ab')
@@ -675,6 +674,23 @@ def storeData(data, _file='example'):
     dbfile.close()
     print('Done')
     return
+
+def check_file(out_file):
+    '''Function to check if file is valid and if it exists to avoid overwriting.'''
+    from pathlib import Path
+    import sys
+    path = Path(out_file)
+
+    if path.is_file():
+        print(f'The file {out_file} exists')
+        user_input = input('Would you like to overwrite it (y/n): ')
+        
+        if (user_input.lower() != 'yes') or user_input.lower() != 'y':
+            print(f'{out_file} not overwritten')
+            print('Exiting ... ')
+            sys.exit()
+        print(f'Deleting previous file: {out_file}')
+        path.unlink()
 
 def loadData(_file='example'):
     ''' Function to load preprocessed event data from file for displaying.'''
