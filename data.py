@@ -1,6 +1,6 @@
 from copy import deepcopy
-from numpy import  arctan2, inf, where, zeros
-import pandas as pd
+from numpy import loadtxt, arctan2, inf, where, zeros
+from tqdm import tqdm
 from display import Display, get_display_ID
 from parameters import MODES, MODE_DEFAULT, \
                        PHASE_MODE_TICKS, \
@@ -566,12 +566,7 @@ def get_energy_tick_data(data_raw, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gr
     else:
 
         # We need to make sure that any hits on pixels that are already lit up do not overwrite, but instead add, energy to the pixel.
-        for nA, t in enumerate(end_time):  # Loop over each datapoint.
-            # get X and Y and end_time for the current data point
-            curr_x = data_raw['x'][nA]
-            curr_y = data_raw['y'][nA]
-            # this list contains the index of all the data points that occur on the same pixel as the current datapoint 
-            # and overlap in time.
+        for n, dA in tqdm(enumerate(data_processed), desc="Processing tick data"):  # d for data point.
 
             for nB, row_i in enumerate(data_raw.iterrows()):
                 # Only bother look at data points ahead of the currently considered one.
@@ -637,7 +632,7 @@ def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_
     events = []
     print("Total points ",len(data_points))
     d = 0
-    for data_point in data_points:
+    for data_point in tqdm(data_points, desc="Processing tick events"):
         #if(d%4==0):
         #    print(" ")
         d += 1
@@ -668,9 +663,28 @@ def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_
                 events.append(Event([x], [y], [color], [mirror_ID], data_point.start_time+tick*data_point.gradient_delay))  # x, y, color, ID are lists.
     return events
 
-def dframe_to_dpclass(data,starttime,endtime):
-    ' function to take in a pandas datframe and construct a list of datapoints for each row'
-    return DataPoint(x=int(data['x']),y=int(data['y']),side=int(data['side']),energy=float(data['energy']),start_time=starttime,end_time=endtime)
+def storeData(data, _file='example'):
+    ''' Function to store preprocessed event data in a file for displaying later'''
+    import pickle
+
+    print(f"Dumping processed data to file: {_file}" )
+    # Dump data to file
+    dbfile = open(_file, 'ab')
+    # source, destination
+    pickle.dump(data, dbfile)                    
+    dbfile.close()
+    print('Done')
+    return
+
+def loadData(_file='example'):
+    ''' Function to load preprocessed event data from file for displaying.'''
+    import pickle
+    print(f"Loading processed data from file: {_file}" )
+    dbfile = open(_file, 'rb')    
+    data = pickle.load(dbfile)
+    dbfile.close()
+    print('Done')
+    return data
 
 class DataPoint:
     def __init__(self, x, y, side=0, energy=0.0, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT,
